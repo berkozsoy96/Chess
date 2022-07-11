@@ -1,24 +1,40 @@
+from piece import Piece, Pawn, Knight, Bishop, Rook, Queen, King, PieceColor
 import numpy as np
-import cv2
 
 
-def create_board(size=800, light=(87, 136, 158), dark=(0, 46, 66)):
-    board = np.zeros(shape=(size, size, 3), dtype="uint8")
-    height, width = board.shape[:2]
-    sq_h, sq_w = height // 8, width // 8
-    dark_square = [[dark] * sq_w] * sq_h
-    light_square = [[light] * sq_w] * sq_h
-    colors = [light_square, dark_square]
-    counter = 0
-    for h in range(8):
-        for w in range(8):
-            color = colors[counter]
-            board[h * sq_h: (h + 1) * sq_h, w * sq_w: (w + 1) * sq_w] = color
-            counter = (counter + 1) % 2
-        counter = (counter + 1) % 2
-    return board
+class Board:
+    def __init__(self, fen_string=None):
+        self.fen_string = fen_string
+        self.pieces = {
+            "p": Pawn,
+            "n": Knight,
+            "b": Bishop,
+            "r": Rook,
+            "q": Queen,
+            "k": King
+        }
+        self.board_state = self.state_from_fen()
+
+    def state_from_fen(self):
+        if self.fen_string is None:
+            self.fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+        positions, player_turn, available_castles, en_passant, half_moves, full_moves = self.fen_string.split()
+        state = np.zeros(shape=(8, 8), dtype=Piece)
+        rank = 0
+        for row in positions.split("/"):
+            file = 0
+            for symbol in row:
+                if symbol.isdigit():
+                    file += int(symbol)
+                    continue
+                pt, pc = self.pieces[symbol]
+                state[rank, file] = pt(pc)
+                file += 1
+            rank += 1
+
+        return state
 
 
-board = create_board()
-cv2.imshow("board", board)
-cv2.waitKey()
+board = Board()
+print(board.board_state)
