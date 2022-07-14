@@ -1,47 +1,42 @@
-import cv2
-import numpy as np
-from enum import Enum
-from dataclasses import dataclass, field
+from pygame.transform import scale
+from pygame.sprite import Sprite
+from pygame.image import load
+from pygame import mouse
+
+from enum import Enum, auto
 
 
 class PieceColor(Enum):
-    WHITE = 8
-    BLACK = 16
+    WHITE = auto()
+    BLACK = auto()
 
 
 class PieceType(Enum):
-    EMPTY = 0
-    PAWN = 1
-    KNIGHT = 2
-    BISHOP = 3
-    ROOK = 4
-    QUEEN = 5
-    KING = 6
+    PAWN = auto()
+    KNIGHT = auto()
+    BISHOP = auto()
+    KING = auto()
+    QUEEN = auto()
+    ROOK = auto()
 
 
-@dataclass
-class Piece:
-    piece_color: PieceColor
-    piece_type: PieceType
-    piece_letter: str
-
-    is_alive: bool = True
-    is_moved: bool = False
-    legal_moves: list = field(default_factory=[])
-
-    piece_image: np.ndarray | None = None
-
-
-class Pawn(Piece):
-    def __init__(self, piece_color: PieceColor):
-        fen_letter = "p"
-        name = "pawn"
-        piece_letter, image_name = (fen_letter, "black_" + name) if piece_color == PieceColor.BLACK else (fen_letter.upper(), "white_" + name)
-        super().__init__(piece_color, PieceType.PAWN, piece_letter=piece_letter,
-                         piece_image=cv2.imread(f"images/{image_name}.png", cv2.IMREAD_UNCHANGED))
-
-
-if __name__ == '__main__':
-    p = Pawn(PieceColor.BLACK)
-    cv2.imshow("asd", p.piece_image)
-    cv2.waitKey()
+class Piece(Sprite):
+    def __init__(self, piece_type: PieceType, color: PieceColor, tile):
+        Sprite.__init__(self)  # Sprite init
+        self.piece_type = piece_type
+        self.color = color
+        self.tile = tile
+        
+        color_name = "white" if self.color == PieceColor.WHITE else "black"
+        self.image = load(f"images/{color_name}_{piece_type.name.lower()}.png")
+        self.image = scale(self.image, self.tile.size)
+        
+        self.rect = self.image.get_rect()
+        self.rect.update(self.tile.position, self.tile.size)
+    
+    def __str__(self) -> str:
+        return f"{self.color.name.lower()} {self.piece_type.name.lower()}"
+    # def update(self):
+    #     x, y = mouse.get_pos()
+    #     if self.rect.left < x < self.rect.right and self.rect.top < y < self.rect.bottom:
+    #         print(self.piece_type, self.color, self.rect)

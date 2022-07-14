@@ -1,72 +1,60 @@
-from dataclasses import dataclass
-from enum import Enum, auto
-
+import sys
+import pygame as pg
 import numpy as np
-
-
-class Color(Enum):
-    WHITE = auto()
-    BLACK = auto()
-
-
-@dataclass
-class Piece:
-    name: str
-
-    def __str__(self):
-        return self.name
-
-
-class Player:
-    def __init__(self, player_name: str, color: Color):
-        self.player_name = player_name
-        self.color = color
-
-
-class Tile:
-    def __init__(self, tile_id: int, piece: Piece | None):
-        self.tile_id = tile_id
-        self.piece = piece
-
-    def __str__(self):
-        return f"{self.tile_id}, {self.piece}"
+from tile import Tile
+from fen_parser import FenParser
 
 
 class Game:
-    def __init__(self, fen_string: str | None = None):
-        self.ranks = [8, 7, 6, 5, 4, 3, 2, 1]  # rows  # TODO: HARD CODED
+    def __init__(self, fen_string: str | None = "default"):
+        self.ranks = [1, 2, 3, 4, 5, 6, 7, 8][::-1]  # rows  # TODO: HARD CODED
         self.files = ["a", "b", "c", "d", "e", "f", "g", "h"]  # cols  # TODO: HARD CODED
+        self.tile_sprites = pg.sprite.RenderUpdates()
+        self.piece_sprites = pg.sprite.RenderUpdates()
         self.game_board = self.prepare_game_board(fen_string)
 
-        self.turn_count = 0
-        self.player_count = 2
-        self.board_perspective = "white"
-        self.move_history = []
-
-    @staticmethod
-    def prepare_game_board(fen_string: str | None = "default"):
+    def prepare_game_board(self, fen_string: str | None = "default"):
+        colors = [pg.Color(248, 224, 176), pg.Color(163, 112, 67)]  # light, dark
         board = []
-        if fen_string is None:
-            for i in range(64):  # TODO: HARD CODED
-                board.append(Tile(i, None))
-            return np.array(board).reshape((8, 8))
+        for row_id, r in enumerate(self.ranks):
+            color_idx = 0 if row_id % 2 == 0 else 1
+            row = []
+            for col_id, f in enumerate(self.files):
+                color = colors[(color_idx + col_id) % 2]
+                # position is x,y not y,x. That's why we give col_id first
+                tile = Tile(name=f"{f}{r}", position=(col_id, row_id), color=color)
+                row.append(tile)
+                self.tile_sprites.add(tile)
+            board.append(row)
 
-        if fen_string == "default":
-            fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+        if fen_string:
+            if fen_string == "default":
+                fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+            FenParser.parse(fen_string, board, self.piece_sprites)
+        
+        return np.array(board, dtype=Tile).reshape((8, 8))
 
-        for i in range(64):  # TODO: HARD CODED
-            board.append(Tile(i, Piece(str(i))))
-        return np.array(board).reshape((8, 8))
+    def start(self):
+        pg.init()
+        pg.display.set_caption('Chess')
+        self.screen = pg.display.set_mode([600,600])
+        pg.display.update()
+
+        while True:
+            for event in pg.event.get():
+                match event.type:
+                    case pg.QUIT:
+                        sys.exit()
+                    case pg.MOUSEBUTTONDOWN:
+                        self.tile_sprites.update()
+                        self.piece_sprites.update()
+                    
+
+            self.tile_sprites.draw(self.screen)
+            self.piece_sprites.draw(self.screen)
+            pg.display.update()
 
 
-@dataclass
-class History:
-    moved_from: Tile
-    moved_to: Tile
-
-
-if __name__ == '__main__':
-    game = Game()
-    for i in range(8):
-        for j in range(8):
-            print(game.game_board[i, j])
+if __name__ == "__main__":
+    game = Game("default")
+    game.start()
