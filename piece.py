@@ -36,7 +36,8 @@ class Piece(Sprite):
     
     def __str__(self) -> str:
         return f"{self.color.name.lower()} {self.piece_type.name.lower()}"
-    # def update(self):
-    #     x, y = mouse.get_pos()
-    #     if self.rect.left < x < self.rect.right and self.rect.top < y < self.rect.bottom:
-    #         print(self.piece_type, self.color, self.rect)
+
+    def update(self):
+        x, y = mouse.get_pos()
+        if self.rect.left < x < self.rect.right and self.rect.top < y < self.rect.bottom:
+            print(self.tile.name, self.piece_type, self.color)

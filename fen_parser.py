@@ -22,4 +22,3 @@ class FenParser:
                     piece_type = piece_type_from_symbol[symbol.lower()]
                     piece = Piece(piece_type, color, tile)
                     sprite_list.add(piece)
-                    tile.piece = piece

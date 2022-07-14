@@ -1,6 +1,6 @@
 import sys
-import pygame as pg
 import numpy as np
+import pygame as pg
 from tile import Tile
 from fen_parser import FenParser
 
@@ -31,13 +31,13 @@ class Game:
             if fen_string == "default":
                 fen_string = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
             FenParser.parse(fen_string, board, self.piece_sprites)
-        
+
         return np.array(board, dtype=Tile).reshape((8, 8))
 
     def start(self):
         pg.init()
         pg.display.set_caption('Chess')
-        self.screen = pg.display.set_mode([600,600])
+        self.screen = pg.display.set_mode([600, 600])
         pg.display.update()
 
         while True:
@@ -46,9 +46,7 @@ class Game:
                     case pg.QUIT:
                         sys.exit()
                     case pg.MOUSEBUTTONDOWN:
-                        self.tile_sprites.update()
                         self.piece_sprites.update()
-                    
 
             self.tile_sprites.draw(self.screen)
             self.piece_sprites.draw(self.screen)
