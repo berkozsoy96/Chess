@@ -3,7 +3,7 @@ from piece import PieceType, PieceColor, Piece
 
 class FenParser:
     @staticmethod
-    def parse(fen_string, board, sprite_list):
+    def parse(fen_string, sprite_list):
         piece_type_from_symbol = {
             "p": PieceType.PAWN,
             "n": PieceType.KNIGHT,
@@ -22,7 +22,6 @@ class FenParser:
                     continue
                 color = PieceColor.BLACK if symbol.islower() else PieceColor.WHITE
                 piece_type = piece_type_from_symbol[symbol.lower()]
-                piece = Piece(piece_type, color)
-                board[rank, file] = piece
+                piece = Piece(piece_type, color, (file, rank))
                 sprite_list.add(piece)
                 file += 1
