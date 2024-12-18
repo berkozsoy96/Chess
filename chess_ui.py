@@ -32,6 +32,16 @@ class MouseEventHandler:
             c = game.files[x//(SCREEN_SIZE//8)]
             r = game.ranks[8-(y//(SCREEN_SIZE//8))-1]
             is_success = game.make_move(f"{self.piece_from}{c}{r}")
+            
+            piece_index_to_be_removed = -1
+            for i, p in enumerate(pieces):
+                piece = p.get_sprite(x, y)
+                if piece and not piece.picked and is_success:
+                    piece_index_to_be_removed = i
+                    break
+            
+            if piece_index_to_be_removed != -1:
+                pieces.pop(piece_index_to_be_removed)
 
             for p in pieces:
                 if p.picked:
@@ -52,9 +62,8 @@ class MouseEventHandler:
 game = Chess()
 window = Window(width=SCREEN_SIZE + 200, height=SCREEN_SIZE)
 board = BoardUI(window_size=SCREEN_SIZE)
-piece_batch = Batch()
 pieces = [
-    PieceUI(piece.symbol(), piece.position, piece_batch) 
+    PieceUI(piece.symbol(), piece.position) 
     for row in game.board for piece in row if piece
 ]
 

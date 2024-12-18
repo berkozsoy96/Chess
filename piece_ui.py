@@ -21,14 +21,13 @@ piece_types = {
 }
 
 class PieceUI(Sprite):
-    def __init__(self, piece_type: str, position: tuple[int, int], batch):
+    def __init__(self, piece_type: str, position: tuple[int, int]):
         self.files = "abcdefgh"
         self.ranks = "87654321"
         super().__init__(
             img=piece_types[piece_type], 
             x=position[1] * (SCREEN_SIZE // 8),
-            y=(8-position[0]-1) * (SCREEN_SIZE // 8),
-            batch=batch
+            y=(8-position[0]-1) * (SCREEN_SIZE // 8)
         )
         self.scale = (SCREEN_SIZE // 8) / self.width
         self.pos_notation = f"{self.files[position[1]]}{self.ranks[position[0]]}"
@@ -40,6 +39,11 @@ class PieceUI(Sprite):
         if (self.x <= x < (self.x + self.width)) and (self.y <= y < (self.y + self.height)):
             self.picked = True
             return self.pos_notation
+        return None
+    
+    def get_sprite(self, x, y):
+        if (self.x <= x < (self.x + self.width)) and (self.y <= y < (self.y + self.height)):
+            return self
         return None
 
     def move(self, pos: str):
