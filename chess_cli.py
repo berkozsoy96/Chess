@@ -26,7 +26,7 @@ class Piece:
         self.position: tuple[int, int] = position  # (r, c) - (rank, file)
         self.position_as_notation: str = position_to_notation(self.position)
         
-        self.possible_moves = []
+        self.possible_moves: list[tuple] = []
     
     def move(self, pos: tuple[int, int]) -> None:
         self.position = pos
@@ -156,7 +156,7 @@ class Chess:
         if isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
             # check if pawn moved 2 sq and update enpassant
             self.enpassant = position_to_notation((end_row+1, end_col)) if piece.color == "w" else position_to_notation((end_row-1, end_col))
-        elif isinstance(piece, Pawn) and (end_row, end_col) == notation_to_position(self.enpassant):
+        elif isinstance(piece, Pawn) and position_to_notation((end_row, end_col)) == self.enpassant:
             # check for enpassant capturing
             if piece.color == "w":
                 self.board[end_row+1][end_col] = None
