@@ -17,6 +17,7 @@ class ChessUI:
         self.selected_sprite = None  # Store the sprite for the selected piece
         self.squares = []  # List to store Rectangle objects for each square
         # TODO: add file and rank labels
+        # TODO: draw selected sprite on top
         # Load resources
         self.load_piece_textures()
         self.create_sprites()
