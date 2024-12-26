@@ -126,13 +126,13 @@ class Chess:
         piece = self.board[start_row][start_col]
         target_piece = self.board[end_row][end_col]
         if not piece:
-            print(f"No piece at {move[:2]} to move.")
+            # print(f"No piece at {move[:2]} to move.")
             return False
         if piece.color != self.colors[self.turn]:
-            print(f"It is {self.colors[self.turn]}'s turn.")
+            # print(f"It is {self.colors[self.turn]}'s turn.")
             return False
         if (end_row, end_col) not in piece.possible_moves:
-            print("Move is not valid!")
+            # print("Move is not valid!")
             return False
 
         self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col)
@@ -222,7 +222,7 @@ class Chess:
             self.enpassant = "-"
 
     def call_calculate_possible_moves_for_every_piece(self):
-        [c.calculate_possible_moves(self.board, self.castling, self.enpassant) for r in self.board for c in r if c]
+        [c.calculate_possible_moves(self.board, self.castling, self.enpassant) for r in self.board for c in r if c and c.color == self.colors[self.turn]]
 
 
 class Pawn(Piece):

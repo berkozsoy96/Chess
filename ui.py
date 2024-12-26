@@ -1,22 +1,22 @@
 import pyglet
 from pyglet.window import mouse
-from pyglet.shapes import Rectangle
+from pyglet.shapes import Rectangle, Circle
 from pyglet.text import Label
 
-from chess_cli import Chess, Piece, position_to_notation
+from chess_cli import Chess, Piece, position_to_notation, notation_to_position
 
 class ChessUI:
     def __init__(self, chess_game):
         self.game: Chess = chess_game
-        self.window = pyglet.window.Window(width=800, height=800, caption="Chess Game")
-        self.square_size = self.window.width // 8
+        self.window = pyglet.window.Window(width=1000, height=800, caption="Berk's Chess Game")
+        self.square_size = self.window.height // 8
         self.selected_piece = None  # Store the currently selected piece
         self.highlighted_squares = []  # To show possible moves
         self.textures: dict[str, pyglet.image.AbstractImage] = {}  # Piece textures for enhanced visuals
         self.sprites: dict[tuple[int, int], pyglet.sprite.Sprite] = {}  # Store sprites for each piece
         self.selected_sprite = None  # Store the sprite for the selected piece
         self.squares = []  # List to store Rectangle objects for each square
-        
+        # TODO: add file and rank labels
         # Load resources
         self.load_piece_textures()
         self.create_sprites()
@@ -24,6 +24,8 @@ class ChessUI:
         # Set event handlers
         self.window.on_draw = self.on_draw
         self.window.on_mouse_press = self.on_mouse_press
+        self.window.on_mouse_release = self.on_mouse_release
+        self.window.on_mouse_drag = self.on_mouse_drag
 
         # Initialize squares once
         self.create_squares()
@@ -111,14 +113,13 @@ class ChessUI:
         """
         Highlight selected and possible move squares.
         """
-        highlight_color = (100, 255, 100)  # Green highlight
+        highlight_color = (50, 50, 50)  # Green highlight
         for move in self.highlighted_squares:
             row, col = move
-            square = Rectangle(
-                x=col * self.square_size,
-                y=(7 - row) * self.square_size,  # Reverse row for graphical representation
-                width=self.square_size,
-                height=self.square_size,
+            square = Circle(
+                x=(col + .5) * self.square_size,
+                y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
+                radius=15,
                 color=highlight_color
             )
             square.opacity = 100
@@ -132,12 +133,56 @@ class ChessUI:
             f"Turn: {'White' if self.game.turn == 0 else 'Black'}",
             font_name="Arial",
             font_size=20,
-            x=10,
+            x=810,
             y=self.window.height - 30,
             anchor_x="left",
             anchor_y="center"
         )
+        
+        castling_label = Label(
+            f"Castling: {'K' if self.game.castling[0] else ''}{'Q' if self.game.castling[1] else ''}{'k' if self.game.castling[2] else ''}{'q' if self.game.castling[3] else ''}",
+            font_name="Arial",
+            font_size=20,
+            x=810,
+            y=self.window.height - 60,
+            anchor_x="left",
+            anchor_y="center"
+        )
+
+        enpassant_label = Label(
+            f"En Passant: {self.game.enpassant}",
+            font_name="Arial",
+            font_size=20,
+            x=810,
+            y=self.window.height - 90,
+            anchor_x="left",
+            anchor_y="center"
+        )
+
+        half_move_label = Label(
+            f"Half Move: {self.game.half_move_clock}",
+            font_name="Arial",
+            font_size=20,
+            x=810,
+            y=self.window.height - 120,
+            anchor_x="left",
+            anchor_y="center"
+        )
+
+        full_move_label = Label(
+            f"Full Move: {self.game.full_move_clock}",
+            font_name="Arial",
+            font_size=20,
+            x=810,
+            y=self.window.height - 150,
+            anchor_x="left",
+            anchor_y="center"
+        )
         turn_label.draw()
+        castling_label.draw()
+        enpassant_label.draw()
+        half_move_label.draw()
+        full_move_label.draw()
 
     def on_draw(self):
         """
@@ -153,26 +198,41 @@ class ChessUI:
         """
         Handle mouse clicks for selecting and moving pieces.
         """
+        self.highlighted_squares = []
         if button == mouse.LEFT:
             col: int = x // self.square_size
             row: int = 7 - (y // self.square_size)  # Reverse for graphical representation
-            
+            piece = self.game.board[row][col]
+            if piece:
+                self.selected_piece = position_to_notation((row, col))
+                self.selected_sprite = self.sprites[(row, col)]
+                self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2)
+                if piece.color == self.game.colors[self.game.turn]:
+                    self.highlighted_squares = piece.possible_moves
+    
+    def on_mouse_release(self, x, y, button, modifiers):
+        if button == mouse.LEFT:
+            col: int = x // self.square_size
+            row: int = 7 - (y // self.square_size)  # Reverse for graphical representation
+            # piece = self.game.board[row][col]
             if self.selected_piece:
                 # Attempt to make a move
                 target_pos = (row, col)
                 move = f"{self.selected_piece}{position_to_notation(target_pos)}"
-                if self.game.make_move(move):
-                    self.create_sprites()  # Update pieces after move
-                else:
-                    print("Invalid move")
-                self.highlighted_squares = []
+                if move[:2] != move[2:]:
+                    if self.game.make_move(move):
+                        self.create_sprites()  # Update pieces after move
+                        self.highlighted_squares = []
+                # restore piece to its original place
+                orjrow, orjcol = notation_to_position(self.selected_piece)
+                self.selected_sprite.update((orjcol) * self.square_size, (7 - orjrow) * self.square_size)
                 self.selected_piece = None
-            else:
-                # Select a piece
-                piece = self.game.board[row][col]
-                if piece and piece.color == self.game.colors[self.game.turn]:
-                    self.selected_piece = position_to_notation((row, col))
-                    self.highlighted_squares = piece.possible_moves
+                self.selected_sprite = None
+    
+    def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
+        if button == mouse.LEFT:
+            if self.selected_sprite:
+                self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2, 5)
 
     def run(self):
         """
