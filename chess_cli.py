@@ -8,10 +8,11 @@ class Chess:
         pieces, turn, castling, enpassant, half_move_clock, full_move_clock = fen_string.split()
         self.board: list[list[Piece]] = self.parse_pieces(pieces)
         self.turn = self.colors.index(turn)
-        self.castling = castling
+        self.castling: list[bool] = self.parse_castling(castling)
         self.enpassant = enpassant
         self.half_move_clock = int(half_move_clock)
         self.full_move_clock = int(full_move_clock)
+        self.call_calculate_possible_moves_for_every_piece()
 
     def parse_pieces(self, fen_piece_part: str):
         rows = fen_piece_part.split('/')
@@ -41,10 +42,17 @@ class Chess:
         }
         return piece_classes[piece_type](color, position)
 
+    def parse_castling(self, castling: str) -> list[bool]:
+        return [
+            "K" in castling,
+            "Q" in castling,
+            "k" in castling,
+            "q" in castling
+        ]
+        
     def print_board(self):
         for r in self.board:
             for c in r:
-                c: Piece
                 print(c.symbol() if c else "-", end=" ")
             print()
         print()
@@ -60,14 +68,23 @@ class Chess:
         """
         Make a move on the board using algebraic notation, e.g., 'e2e4'.
         """
-        # Parse the move
-        (start_row, start_col) = self.parse_position(move[:2])
-        (end_row, end_col) = self.parse_position(move[2:])
+        # check if move is valid
+        if (len(move) != 4) or \
+            (move[0] not in self.files) or \
+            (move[1] not in self.ranks) or \
+            (move[2] not in self.files) or \
+            (move[3] not in self.ranks):
+            print(f"{move} is not a valid string. Valid string example: 'e2e4'.")
+            return False
 
-        # Get the piece to move
+        # Parse the move
+        (start_row, start_col) = self.notation_to_position(move[:2])
+        (end_row, end_col) = self.notation_to_position(move[2:])
+
+        # Get the piece that will be moved
         piece = self.board[start_row][start_col]
         if not piece:
-            print(f"No piece at {move[1]}{move[0]} to move.")
+            print(f"No piece at {move[:2]} to move.")
             return False
         if piece.color != self.colors[self.turn]:
             print(f"It is {self.colors[self.turn]}'s turn.")
@@ -76,91 +93,119 @@ class Chess:
             print("Move is not valid!")
             return False
 
-        # Move the piece
+        # CHECK MOVE
+        if isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
+            # check if pawn moved 2 sq and update enpassant
+            self.enpassant = self.position_to_notation((end_row+1, end_col)) if piece.color == "w" else self.position_to_notation((end_row-1, end_col))
+        elif isinstance(piece, Pawn) and move[2:] == self.enpassant:
+            # check for enpassant capturing
+            if piece.color == "w":
+                self.board[end_row+1][end_col] = None
+            else:
+                self.board[end_row-1][end_col] = None
+            self.enpassant = "-"
+        elif isinstance(piece, King) and abs(end_col-start_col) == 2:
+            # check for castling
+            if end_col-start_col == 2:
+                rook = self.board[end_row][-1]
+                self.board[end_row][end_col-1] = rook
+                self.board[end_row][-1] = None
+                rook.move((end_row, end_col-1))
+            else:
+                rook = self.board[end_row][0]
+                self.board[end_row][end_col+1] = rook
+                self.board[end_row][0] = None
+                rook.move((end_row, end_col+1))
+            if piece.color == "w":
+                self.castling[0] = False
+                self.castling[1] = False
+            else:
+                self.castling[2] = False
+                self.castling[3] = False
+            self.enpassant = "-"
+        elif isinstance(piece, King):
+            if piece.color == "w":
+                self.castling[0] = False
+                self.castling[1] = False
+            else:
+                self.castling[2] = False
+                self.castling[3] = False
+            self.enpassant = "-"
+            pass
+        elif isinstance(piece, Rook):
+            match (piece.color, piece.is_king_side):
+                case ("w", True):
+                    self.castling[0] = False
+                case ("w", False):
+                    self.castling[1] = False
+                case ("b", True):
+                    self.castling[2] = False
+                case ("b", False):
+                    self.castling[3] = False
+                case _:
+                    print("HUH!!!", piece.color, piece.is_king_side)
+            self.enpassant = "-"
+        else:
+            self.enpassant = "-"
+        # default move or capture
         self.board[end_row][end_col] = piece
         self.board[start_row][start_col] = None
-
-        # Update piece position
         piece.move((end_row, end_col))
-
-        # Handle special rules
-        # self.handle_special_rules(piece, start_row, start_col, end_row, end_col)
 
         # Update turn and move counters
         self.turn = 1 - self.turn
         self.full_move_clock += 1 if self.turn == 0 else 0
         self.half_move_clock = 0 if isinstance(piece, Pawn) else self.half_move_clock + 1
         self.print_board()
+        self.call_calculate_possible_moves_for_every_piece()
         return True
 
-    def handle_special_rules(self, piece, start_row, start_col, end_row, end_col):
-        """
-        Handle special chess rules like capturing, en passant, castling, and pawn promotion.
-        """
-        # Capture
-        if self.board[end_row][end_col] and self.board[end_row][end_col].color != piece.color:
-            self.board[end_row][end_col] = None
-            self.half_move_clock = 0
-
-        # En passant
-        if isinstance(piece, Pawn) and self.enpassant != "-" and (end_row, end_col) == self.parse_position(self.enpassant):
-            capture_row = start_row + (1 if piece.color == 'black' else -1)
-            self.board[capture_row][end_col] = None
-
-        # Pawn promotion
-        if isinstance(piece, Pawn) and (end_row == 0 or end_row == 7):
-            self.board[end_row][end_col] = Queen(piece.color, (end_row, end_col))
-
-        # Castling
-        if isinstance(piece, King) and abs(end_col - start_col) == 2:
-            rook_start_col = 0 if end_col < start_col else 7
-            rook_end_col = 3 if end_col < start_col else 5
-            rook = self.board[start_row][rook_start_col]
-            self.board[start_row][rook_end_col] = rook
-            self.board[start_row][rook_start_col] = None
-            rook.position = (start_row, rook_end_col)
-
-    def parse_position(self, pos: str):
+    def notation_to_position(self, notation: str) -> tuple[int, int]:
         """
         Convert a chess position like 'e4' to (row, col).
         """
-        col = self.files.index(pos[0])
-        row = self.ranks.index(pos[1])
+        col = self.files.index(notation[0])
+        row = self.ranks.index(notation[1])
         return (row, col)
 
+    def position_to_notation(self, position: tuple[int, int]) -> str:
+        # position is (row, col) -> (ranks, files)
+        return f"{self.files[position[1]]}{self.ranks[position[0]]}"
+
+    def call_calculate_possible_moves_for_every_piece(self):
+        [c.calculate_possible_moves(self.board, self.castling, self.enpassant) for r in self.board for c in r if c]
 
 class Piece:
-    def __init__(self, color: str, position: tuple):
+    def __init__(self, color: str, position: tuple[int, int]):
+        self.files = "abcdefgh"
+        self.ranks = "87654321"
         self.color = color
-        self.position = position
+        self.is_moved = False
+
+        self.position = position  # (r, c) - (rank, file)
+        self.position_as_notation = f"{self.files[position[1]]}{self.ranks[position[0]]}"
+        
         self.possible_moves = []
     
-    def move(self, pos: tuple):
+    def move(self, pos: tuple) -> None:
         self.position = pos
+        self.position_as_notation = f"{self.files[pos[1]]}{self.ranks[pos[0]]}"
+        self.is_moved = True
 
-    def symbol(self):
+    def symbol(self) -> str:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def calculate_possible_moves(self):
+    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+        # TODO: write this function for every piece
         raise NotImplementedError("This method should be implemented by subclasses.")
 
 
 class Pawn(Piece):
-    def __init__(self, color, position):
-        super().__init__(color, position)
-        self.is_first_move = True
-        self.possible_moves = self.calculate_possible_moves()
-
-    def move(self, pos: tuple):
-        self.position = pos
-        self.is_first_move = False
-        self.possible_moves = self.calculate_possible_moves()
-    
-    def symbol(self):
+    def symbol(self) -> str:
         return "P" if self.color == 'w' else "p"
 
-    def calculate_possible_moves(self):
-        if self.is_first_move:
+    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+        if not self.is_moved:
             if self.color == "w":
                 return [(self.position[0]-1, self.position[1]), (self.position[0]-2, self.position[1])]
             if self.color == "b":
@@ -172,6 +217,10 @@ class Pawn(Piece):
                 return [(self.position[0]+1, self.position[1])]
 
 class Rook(Piece):
+    def __init__(self, color, position):
+        super().__init__(color, position)
+        self.is_king_side = False if position[1] == 0 else True
+    
     def symbol(self):
         return "R" if self.color == 'w' else "r"
 
@@ -185,7 +234,6 @@ class Knight(Piece):
     def calculate_possible_moves(self):
         return []
 
-
 class Bishop(Piece):
     def symbol(self):
         return "B" if self.color == 'w' else "b"
@@ -193,14 +241,12 @@ class Bishop(Piece):
     def calculate_possible_moves(self):
         return []
 
-
 class Queen(Piece):
     def symbol(self):
         return "Q" if self.color == 'w' else "q"
 
     def calculate_possible_moves(self):
         return []
-
 
 class King(Piece):
     def symbol(self):
