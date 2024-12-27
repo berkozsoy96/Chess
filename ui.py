@@ -1,26 +1,37 @@
-import pyglet
-from pyglet.window import mouse
-from pyglet.shapes import Rectangle, Circle
+from pyglet import app
 from pyglet.text import Label
+from pyglet.image import AbstractImage, load
+from pyglet.sprite import Sprite
+from pyglet.window import Window, mouse
+from pyglet.shapes import Rectangle, Circle
+from pyglet.graphics import Batch
 
-from chess_cli import Chess, Piece, position_to_notation, notation_to_position
+from chess_cli import Chess, Piece, position_to_notation, notation_to_position, FILES, RANKS
 
 class ChessUI:
     def __init__(self, chess_game):
         self.game: Chess = chess_game
-        self.window = pyglet.window.Window(width=1000, height=800, caption="Berk's Chess Game")
+
+        self.window = Window(width=1000, height=800, caption="Berk's Chess Game")
         self.square_size = self.window.height // 8
-        self.selected_piece = None  # Store the currently selected piece
-        self.highlighted_squares = []  # To show possible moves
-        self.textures: dict[str, pyglet.image.AbstractImage] = {}  # Piece textures for enhanced visuals
-        self.sprites: dict[tuple[int, int], pyglet.sprite.Sprite] = {}  # Store sprites for each piece
-        self.selected_sprite = None  # Store the sprite for the selected piece
-        self.squares = []  # List to store Rectangle objects for each square
-        # TODO: add file and rank labels
-        # TODO: draw selected sprite on top
-        # Load resources
+        
+        # Initialize squares once
+        self.squares: list[Rectangle] = []  # List to store Rectangle objects for each square
+        self.file_labels: list[Label] = []
+        self.rank_labels: list[Label] = []
+        self.create_squares()
+        
+        self.textures: dict[str, AbstractImage] = {}  # Piece textures for enhanced visuals
         self.load_piece_textures()
+        
+        self.sprites: dict[tuple[int, int], Sprite] = {}  # Store sprites for each piece
+        self.background = Batch()
+        self.foreground = Batch()
         self.create_sprites()
+        
+        self.highlighted_squares = []  # To show possible moves
+        self.selected_sprite = None  # Store the sprite for the selected piece
+        self.source_sq = None  # Store the currently selected piece
         
         # Set event handlers
         self.window.on_draw = self.on_draw
@@ -28,39 +39,11 @@ class ChessUI:
         self.window.on_mouse_release = self.on_mouse_release
         self.window.on_mouse_drag = self.on_mouse_drag
 
-        # Initialize squares once
-        self.create_squares()
-
-    def load_piece_textures(self):
-        """
-        Preload textures for chess pieces and labels as a fallback.
-        """
-        pieces = "rnbqkpRNBQKP"
-        for piece in pieces:
-            piece_name: str
-            match piece.lower():
-                case "r":
-                    piece_name = "rook"
-                case "n":
-                    piece_name = "knight"
-                case "b":
-                    piece_name = "bishop"
-                case "q":
-                    piece_name = "queen"
-                case "k":
-                    piece_name = "king"
-                case "p":
-                    piece_name = "pawn"
-                case _:
-                    print("wtf!")
-            # Load textures for each piece from a hypothetical `resources` directory
-            self.textures[piece] = pyglet.image.load(f"images/{'black' if piece.islower() else 'white'}-{piece_name}.png")
-
     def create_squares(self):
         """
         Create Rectangle objects for each square on the chessboard.
         """
-        colors = [(184, 134, 97), (238, 214, 176)]  # Light and dark square colors
+        colors = [(184, 134, 97), (238, 214, 176)]  # Dark and light square colors
         for row in range(8):
             for col in range(8):
                 color = colors[(row + col) % 2]
@@ -72,6 +55,45 @@ class ChessUI:
                     color=color
                 )
                 self.squares.append(square)
+        self.file_labels = [
+            Label(
+                text=f,
+                font_name="Arial",
+                font_size=15,
+                x=(i) * self.square_size + 5,
+                y=10,
+                color=(50, 50, 50)
+            ) for i, f in enumerate(FILES)
+        ]
+        self.rank_labels = [
+            Label(
+                text=r,
+                font_name="Arial",
+                font_size=15,
+                x=5,
+                y=(i+1) * self.square_size - 20,
+                color=(50, 50, 50)
+            ) for i, r in enumerate(RANKS[::-1])
+        ]
+
+    def load_piece_textures(self):
+        """
+        Preload textures for chess pieces and labels as a fallback.
+        """
+        self.textures = {
+            "r": load(f"images/r.png"),
+            "n": load(f"images/n.png"),
+            "b": load(f"images/b.png"),
+            "q": load(f"images/q.png"),
+            "k": load(f"images/k.png"),
+            "p": load(f"images/p.png"),
+            "R": load(f"images/R.png"),
+            "N": load(f"images/N.png"),
+            "B": load(f"images/B.png"),
+            "Q": load(f"images/Q.png"),
+            "K": load(f"images/K.png"),
+            "P": load(f"images/P.png")
+        }
 
     def create_sprites(self):
         """
@@ -92,7 +114,7 @@ class ChessUI:
         y = (7 - row) * self.square_size  # Reverse row for graphical representation
 
         texture = self.textures[piece.symbol()]
-        sprite = pyglet.sprite.Sprite(texture, x=x, y=y)
+        sprite = Sprite(texture, x=x, y=y, batch=self.background)
         sprite.scale = self.square_size / texture.width
         self.sprites[(row, col)] = sprite
 
@@ -102,13 +124,17 @@ class ChessUI:
         """
         for square in self.squares:
             square.draw()
+        for label in self.file_labels:
+            label.draw()
+        for label in self.rank_labels:
+            label.draw()
 
     def draw_pieces(self):
         """
         Draw the pieces on the board based on the game's current state.
         """
-        for (row, col), sprite_or_label in self.sprites.items():
-            sprite_or_label.draw()
+        self.background.draw()
+        self.foreground.draw()
 
     def highlight_squares(self):
         """
@@ -117,14 +143,14 @@ class ChessUI:
         highlight_color = (50, 50, 50)  # Green highlight
         for move in self.highlighted_squares:
             row, col = move
-            square = Circle(
+            circle = Circle(
                 x=(col + .5) * self.square_size,
                 y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
                 radius=15,
                 color=highlight_color
             )
-            square.opacity = 100
-            square.draw()
+            circle.opacity = 100
+            circle.draw()
 
     def display_game_status(self):
         """
@@ -196,16 +222,13 @@ class ChessUI:
         self.display_game_status()
 
     def on_mouse_press(self, x, y, button, modifiers):
-        """
-        Handle mouse clicks for selecting and moving pieces.
-        """
         self.highlighted_squares = []
         if button == mouse.LEFT:
             col: int = x // self.square_size
-            row: int = 7 - (y // self.square_size)  # Reverse for graphical representation
+            row: int = 7 - (y // self.square_size)
             piece = self.game.board[row][col]
             if piece:
-                self.selected_piece = position_to_notation((row, col))
+                self.source_sq = position_to_notation((row, col))
                 self.selected_sprite = self.sprites[(row, col)]
                 self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2)
                 if piece.color == self.game.colors[self.game.turn]:
@@ -214,36 +237,32 @@ class ChessUI:
     def on_mouse_release(self, x, y, button, modifiers):
         if button == mouse.LEFT:
             col: int = x // self.square_size
-            row: int = 7 - (y // self.square_size)  # Reverse for graphical representation
-            # piece = self.game.board[row][col]
-            if self.selected_piece:
-                # Attempt to make a move
+            row: int = 7 - (y // self.square_size)
+            if self.source_sq:
                 target_pos = (row, col)
-                move = f"{self.selected_piece}{position_to_notation(target_pos)}"
+                move = f"{self.source_sq}{position_to_notation(target_pos)}"
                 if move[:2] != move[2:]:
                     if self.game.make_move(move):
-                        self.create_sprites()  # Update pieces after move
+                        self.create_sprites()
                         self.highlighted_squares = []
-                # restore piece to its original place
-                orjrow, orjcol = notation_to_position(self.selected_piece)
+                
+                orjrow, orjcol = notation_to_position(self.source_sq)
+                self.selected_sprite.batch = self.background
                 self.selected_sprite.update((orjcol) * self.square_size, (7 - orjrow) * self.square_size)
-                self.selected_piece = None
+                self.source_sq = None
                 self.selected_sprite = None
     
     def on_mouse_drag(self, x, y, dx, dy, button, modifiers):
         if button == mouse.LEFT:
             if self.selected_sprite:
-                self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2, 5)
+                self.selected_sprite.batch = self.foreground
+                self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2)
 
     def run(self):
-        """
-        Start the Pyglet application.
-        """
-        pyglet.app.run()
+        app.run()
 
 
-# Example usage:
 if __name__ == "__main__":
-    chess_game = Chess()  # Use your Chess class here
+    chess_game = Chess()
     ui = ChessUI(chess_game)
     ui.run()
