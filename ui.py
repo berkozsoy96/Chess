@@ -81,18 +81,18 @@ class ChessUI:
         Preload textures for chess pieces and labels as a fallback.
         """
         self.textures = {
-            "r": load(f"images/r.png"),
-            "n": load(f"images/n.png"),
-            "b": load(f"images/b.png"),
-            "q": load(f"images/q.png"),
-            "k": load(f"images/k.png"),
-            "p": load(f"images/p.png"),
-            "R": load(f"images/R.png"),
-            "N": load(f"images/N.png"),
-            "B": load(f"images/B.png"),
-            "Q": load(f"images/Q.png"),
-            "K": load(f"images/K.png"),
-            "P": load(f"images/P.png")
+            "r": load(f"images/br.png"),
+            "n": load(f"images/bn.png"),
+            "b": load(f"images/bb.png"),
+            "q": load(f"images/bq.png"),
+            "k": load(f"images/bk.png"),
+            "p": load(f"images/bp.png"),
+            "R": load(f"images/wr.png"),
+            "N": load(f"images/wn.png"),
+            "B": load(f"images/wb.png"),
+            "Q": load(f"images/wq.png"),
+            "K": load(f"images/wk.png"),
+            "P": load(f"images/wp.png")
         }
 
     def create_sprites(self):
