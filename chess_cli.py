@@ -27,6 +27,7 @@ class Piece:
         self.position_as_notation: str = position_to_notation(self.position)
         
         self.possible_moves: list[tuple] = []
+        self.attacked_squares: list[tuple] = []
     
     def move(self, pos: tuple[int, int]) -> None:
         self.position = pos
@@ -37,9 +38,10 @@ class Piece:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
-        # TODO: write this function for every piece
         raise NotImplementedError("This method should be implemented by subclasses.")
 
+    def calculate_attacked_squares(self, board: list[list["Piece"]]) -> None:
+        raise NotImplementedError("This method should be implemented by subclasses.")
 
 class Chess:
     def __init__(self, fen: str = None):
@@ -53,7 +55,9 @@ class Chess:
         self.enpassant = enpassant
         self.half_move_clock = int(half_move_clock)
         self.full_move_clock = int(full_move_clock)
-        self.call_calculate_possible_moves_for_every_piece()
+        self.attacked_squares: dict[str, list[tuple[int, int]]]
+        self.get_attacked_squares()
+        self.get_possible_moves()
 
     def parse_pieces(self, fen_piece_part: str):
         rows = fen_piece_part.split('/')
@@ -149,7 +153,8 @@ class Chess:
         self.full_move_clock += 1 if self.turn == 0 else 0
         self.half_move_clock = 0 if isinstance(piece, Pawn) else self.half_move_clock + 1
         self.print_board()
-        self.call_calculate_possible_moves_for_every_piece()
+        self.get_attacked_squares()
+        self.get_possible_moves()
         return True
 
     def check_special_cases(self, piece: Piece, target_piece: Piece, start_row: int, start_col: int, end_row: int, end_col: int):
@@ -221,8 +226,17 @@ class Chess:
         else:
             self.enpassant = "-"
 
-    def call_calculate_possible_moves_for_every_piece(self):
+    def get_possible_moves(self) -> None:
         [c.calculate_possible_moves(self.board, self.castling, self.enpassant) for r in self.board for c in r if c and c.color == self.colors[self.turn]]
+
+    def get_attacked_squares(self) -> None:
+        self.attacked_squares = {}
+        for r in self.board :
+            for c in r:
+                if c and c.color == self.colors[1-self.turn]:
+                    c.calculate_attacked_squares(self.board)
+                    if c.attacked_squares:
+                        self.attacked_squares[c.position_as_notation] = c.attacked_squares
 
 
 class Pawn(Piece):
@@ -256,6 +270,18 @@ class Pawn(Piece):
             en_row, en_col = notation_to_position(enpassant)
             if abs(en_col - col) == 1 and en_row == row + direction:
                 self.possible_moves.append((en_row, en_col))
+
+    def calculate_attacked_squares(self, board: list[list["Piece"]]):
+        self.attacked_squares = []
+        direction = -1 if self.color == 'w' else 1  # Pawns move up (-1) for white, down (+1) for black
+        row, col = self.position
+        
+        for dc in [-1, 1]:  # Diagonal left (-1) and right (+1)
+            new_col = col + dc
+            if (0 <= new_col < 8) and (0 <= row + direction < 8):
+                target_piece = board[row + direction][new_col]
+                if not target_piece or target_piece.color != self.color:
+                    self.attacked_squares.append((row + direction, new_col))
 
 
 class Rook(Piece):
@@ -298,6 +324,36 @@ class Rook(Piece):
                 new_row += dr
                 new_col += dc
 
+    def calculate_attacked_squares(self, board: list[list["Piece"]]):
+        self.attacked_squares = []
+        directions = [
+            (-1, 0), (1, 0),  # Vertical: up, down
+            (0, -1), (0, 1)   # Horizontal: left, right
+        ]
+
+        row, col = self.position
+
+        for dr, dc in directions:
+            new_row, new_col = row + dr, col + dc
+
+            while 0 <= new_row < 8 and 0 <= new_col < 8:
+                target_piece = board[new_row][new_col]
+
+                if not target_piece:
+                    # If the square is empty, add it to possible moves
+                    self.attacked_squares.append((new_row, new_col))
+                elif target_piece.color != self.color:
+                    # If the square contains an opponent's piece, add it and stop further movement
+                    self.attacked_squares.append((new_row, new_col))
+                    break
+                else:
+                    # If the square contains a piece of the same color, stop further movement
+                    break
+
+                # Move further in the current direction
+                new_row += dr
+                new_col += dc
+
 
 class Knight(Piece):
     def symbol(self):
@@ -327,6 +383,29 @@ class Knight(Piece):
                 if not target_piece or target_piece.color != self.color:
                     self.possible_moves.append((new_row, new_col))
 
+    def calculate_attacked_squares(self, board):
+        self.attacked_squares = []
+        # Define all potential moves for a knight
+        knight_moves = [
+            (-2, -1), (-2, 1),  # Two up, one left/right
+            (-1, -2), (-1, 2),  # One up, two left/right
+            (1, -2), (1, 2),    # One down, two left/right
+            (2, -1), (2, 1)     # Two down, one left/right
+        ]
+
+        row, col = self.position
+
+        for dr, dc in knight_moves:
+            new_row, new_col = row + dr, col + dc
+
+            # Ensure the new position is within the board bounds
+            if 0 <= new_row < 8 and 0 <= new_col < 8:
+                target_piece = board[new_row][new_col]
+
+                # Add the move if the target square is empty or contains an opponent's piece
+                if not target_piece or target_piece.color != self.color:
+                    self.attacked_squares.append((new_row, new_col))
+
 
 class Bishop(Piece):
     def symbol(self):
@@ -352,6 +431,34 @@ class Bishop(Piece):
                 elif target_piece.color != self.color:
                     # If the square contains an opponent's piece, add it and stop further movement
                     self.possible_moves.append((new_row, new_col))
+                    break
+                else:
+                    # If the square contains a piece of the same color, stop further movement
+                    break
+
+                # Move further in the current direction
+                new_row += dr
+                new_col += dc
+    
+    def calculate_attacked_squares(self, board):
+        self.attacked_squares = []
+         # Define directions for diagonal movement
+        directions = [(-1, -1), (-1, 1), (1, -1), (1, 1)]  # Top-left, top-right, bottom-left, bottom-right
+
+        row, col = self.position
+
+        for dr, dc in directions:
+            new_row, new_col = row + dr, col + dc
+
+            while 0 <= new_row < 8 and 0 <= new_col < 8:
+                target_piece = board[new_row][new_col]
+
+                if not target_piece:
+                    # If the square is empty, add it to possible moves
+                    self.attacked_squares.append((new_row, new_col))
+                elif target_piece.color != self.color:
+                    # If the square contains an opponent's piece, add it and stop further movement
+                    self.attacked_squares.append((new_row, new_col))
                     break
                 else:
                     # If the square contains a piece of the same color, stop further movement
@@ -391,6 +498,40 @@ class Queen(Piece):
                 elif target_piece.color != self.color:
                     # If the square contains an opponent's piece, add it and stop further movement
                     self.possible_moves.append((new_row, new_col))
+                    break
+                else:
+                    # If the square contains a piece of the same color, stop further movement
+                    break
+
+                # Move further in the current direction
+                new_row += dr
+                new_col += dc
+
+    def calculate_attacked_squares(self, board):
+        self.attacked_squares = []
+
+        # Define directions for queen movement (horizontal, vertical, and diagonal)
+        directions = [
+            (-1, 0), (1, 0),  # Vertical: up, down
+            (0, -1), (0, 1),  # Horizontal: left, right
+            (-1, -1), (-1, 1),  # Diagonal: top-left, top-right
+            (1, -1), (1, 1)    # Diagonal: bottom-left, bottom-right
+        ]
+
+        row, col = self.position
+
+        for dr, dc in directions:
+            new_row, new_col = row + dr, col + dc
+
+            while 0 <= new_row < 8 and 0 <= new_col < 8:
+                target_piece = board[new_row][new_col]
+
+                if not target_piece:
+                    # If the square is empty, add it to possible moves
+                    self.attacked_squares.append((new_row, new_col))
+                elif target_piece.color != self.color:
+                    # If the square contains an opponent's piece, add it and stop further movement
+                    self.attacked_squares.append((new_row, new_col))
                     break
                 else:
                     # If the square contains a piece of the same color, stop further movement
@@ -464,6 +605,27 @@ class King(Piece):
             board[row][0].color == self.color
         )
 
+    def calculate_attacked_squares(self, board):
+        self.attacked_squares = []
+        # Define all possible movement directions for the king
+        directions = [
+            (-1, 0), (1, 0),  # Vertical: up, down
+            (0, -1), (0, 1),  # Horizontal: left, right
+            (-1, -1), (-1, 1),  # Diagonal: top-left, top-right
+            (1, -1), (1, 1)    # Diagonal: bottom-left, bottom-right
+        ]
+
+        row, col = self.position
+
+        for dr, dc in directions:
+            new_row, new_col = row + dr, col + dc
+
+            if 0 <= new_row < 8 and 0 <= new_col < 8:
+                target_piece = board[new_row][new_col]
+
+                if not target_piece or target_piece.color != self.color:
+                    # Add square if empty or occupied by opponent
+                    self.attacked_squares.append((new_row, new_col))
 
 if __name__ == "__main__":
     chess = Chess()

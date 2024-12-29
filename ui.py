@@ -1,9 +1,9 @@
-from pyglet import app
+import pyglet
 from pyglet.text import Label
 from pyglet.image import AbstractImage, load
 from pyglet.sprite import Sprite
 from pyglet.window import Window, mouse
-from pyglet.shapes import Rectangle, Circle
+from pyglet.shapes import Rectangle, Circle, Arc
 from pyglet.graphics import Batch
 
 from chess_cli import Chess, Piece, position_to_notation, notation_to_position, FILES, RANKS
@@ -143,14 +143,42 @@ class ChessUI:
         highlight_color = (50, 50, 50)  # Green highlight
         for move in self.highlighted_squares:
             row, col = move
-            circle = Circle(
-                x=(col + .5) * self.square_size,
-                y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
-                radius=15,
-                color=highlight_color
-            )
+            if self.game.board[row][col]:
+                circle = Arc(
+                    x=(col + .5) * self.square_size,
+                    y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
+                    radius=self.square_size*.5 - 5,
+                    color=highlight_color,
+                    thickness=5
+                )
+            else:
+                circle = Circle(
+                    x=(col + .5) * self.square_size,
+                    y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
+                    radius=self.square_size*.15,
+                    color=highlight_color
+                )
             circle.opacity = 100
             circle.draw()
+
+    def highlight_attaced_squares(self):
+        """
+        Highlight selected and possible move squares.
+        """
+        ms = []
+        highlight_color = (150, 20, 30)  # Red highlight
+        for sourse, moves in self.game.attacked_squares.items():
+            ms += moves
+        for move in list(set(ms)):
+            row, col = move
+            rect = Circle(
+                x=(col + .5) * self.square_size,
+                y=(7 - row + .5) * self.square_size,  # Reverse row for graphical representation
+                radius=self.square_size*.4,
+                color=highlight_color
+            )
+            rect.opacity = 100  # 0 - 255
+            rect.draw()
 
     def display_game_status(self):
         """
@@ -218,6 +246,7 @@ class ChessUI:
         self.window.clear()
         self.draw_board()
         self.highlight_squares()
+        # self.highlight_attaced_squares()
         self.draw_pieces()
         self.display_game_status()
 
@@ -259,7 +288,7 @@ class ChessUI:
                 self.selected_sprite.update(x-self.selected_sprite.width/2, y-self.selected_sprite.width/2)
 
     def run(self):
-        app.run()
+        pyglet.app.run()
 
 
 if __name__ == "__main__":
