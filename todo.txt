@@ -1,0 +1,6 @@
+pins
+checks
+promotions
+
+checkmate
+stalemate

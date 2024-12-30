@@ -26,8 +26,8 @@ class Piece:
         self.position: tuple[int, int] = position  # (r, c) - (rank, file)
         self.position_as_notation: str = position_to_notation(self.position)
         
-        self.possible_moves: list[tuple] = []
-        self.attacked_squares: list[tuple] = []
+        self.possible_moves: list[tuple[int, int]] = []
+        self.attacked_squares: list[tuple[int, int]] = []
     
     def move(self, pos: tuple[int, int]) -> None:
         self.position = pos
@@ -37,7 +37,7 @@ class Piece:
     def symbol(self) -> str:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def calculate_attacked_squares(self, board: list[list["Piece"]]) -> None:
@@ -227,7 +227,7 @@ class Chess:
             self.enpassant = "-"
 
     def get_possible_moves(self) -> None:
-        [c.calculate_possible_moves(self.board, self.castling, self.enpassant) for r in self.board for c in r if c and c.color == self.colors[self.turn]]
+        [c.calculate_possible_moves(self.board, self.attacked_squares, self.castling, self.enpassant) for r in self.board for c in r if c and c.color == self.colors[self.turn]]
 
     def get_attacked_squares(self) -> None:
         self.attacked_squares = {}
@@ -243,7 +243,7 @@ class Pawn(Piece):
     def symbol(self) -> str:
         return "P" if self.color == 'w' else "p"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
         direction = -1 if self.color == 'w' else 1  # Pawns move up (-1) for white, down (+1) for black
 
@@ -292,7 +292,7 @@ class Rook(Piece):
     def symbol(self):
         return "R" if self.color == 'w' else "r"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
 
         # Define directions for rook movement (horizontal and vertical)
@@ -359,7 +359,7 @@ class Knight(Piece):
     def symbol(self):
         return "N" if self.color == 'w' else "n"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
 
         # Define all potential moves for a knight
@@ -411,7 +411,7 @@ class Bishop(Piece):
     def symbol(self):
         return "B" if self.color == 'w' else "b"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
 
         # Define directions for diagonal movement
@@ -473,7 +473,7 @@ class Queen(Piece):
     def symbol(self):
         return "Q" if self.color == 'w' else "q"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: str = "-", enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: str = "-", enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
 
         # Define directions for queen movement (horizontal, vertical, and diagonal)
@@ -546,7 +546,7 @@ class King(Piece):
     def symbol(self):
         return "K" if self.color == 'w' else "k"
 
-    def calculate_possible_moves(self, board: list[list["Piece"]], castling: list[bool], enpassant: str = "-") -> None:
+    def calculate_possible_moves(self, board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], castling: list[bool], enpassant: str = "-") -> None:
         self.possible_moves = []  # Clear previous moves
 
         # Define all possible movement directions for the king
@@ -557,6 +557,7 @@ class King(Piece):
             (1, -1), (1, 1)    # Diagonal: bottom-left, bottom-right
         ]
 
+        asf = list(set([m for _, squares in attacked_squares.items() for m in squares]))
         row, col = self.position
 
         for dr, dc in directions:
@@ -564,7 +565,8 @@ class King(Piece):
 
             if 0 <= new_row < 8 and 0 <= new_col < 8:
                 target_piece = board[new_row][new_col]
-
+                if (new_row, new_col) in asf:
+                    continue
                 if not target_piece or target_piece.color != self.color:
                     # Add square if empty or occupied by opponent
                     self.possible_moves.append((new_row, new_col))
@@ -573,33 +575,37 @@ class King(Piece):
         if not self.is_moved:
             if self.color == 'w':
                 # White castling
-                if castling[0] and self.can_castle_kingside(board, row, col):
+                if castling[0] and self.can_castle_kingside(board, asf, row, col):
                     self.possible_moves.append((row, col + 2))
-                if castling[1] and self.can_castle_queenside(board, row, col):
+                if castling[1] and self.can_castle_queenside(board, asf, row, col):
                     self.possible_moves.append((row, col - 2))
             else:
                 # Black castling
-                if castling[2] and self.can_castle_kingside(board, row, col):
+                if castling[2] and self.can_castle_kingside(board, asf, row, col):
                     self.possible_moves.append((row, col + 2))
-                if castling[3] and self.can_castle_queenside(board, row, col):
+                if castling[3] and self.can_castle_queenside(board, asf, row, col):
                     self.possible_moves.append((row, col - 2))
 
-    def can_castle_kingside(self, board: list[list["Piece"]], row: int, col: int) -> bool:
-        # Check if squares between king and kingside rook are empty and rook is unmoved
+    def can_castle_kingside(self, board: list[list["Piece"]], attacked_squares: list[tuple[int, int]], row: int, col: int) -> bool:
+        # Check if squares between king and kingside rook are empty, not attacked and rook is unmoved
+        
         return (
-            board[row][col + 1] is None and
-            board[row][col + 2] is None and
+            (row, col) not in attacked_squares and  # cannot castle through check
+            board[row][col + 1] is None and (row, col + 1) not in attacked_squares and
+            board[row][col + 2] is None and (row, col + 2) not in attacked_squares and
             isinstance(board[row][7], Rook) and
             not board[row][7].is_moved and
             board[row][7].color == self.color
         )
 
-    def can_castle_queenside(self, board: list[list["Piece"]], row: int, col: int) -> bool:
-        # Check if squares between king and queenside rook are empty and rook is unmoved
+    def can_castle_queenside(self, board: list[list["Piece"]], attacked_squares: list[tuple[int, int]], row: int, col: int) -> bool:
+        # Check if squares between king and queenside rook are empty, not attacked and rook is unmoved
+        
         return (
-            board[row][col - 1] is None and
-            board[row][col - 2] is None and
-            board[row][col - 3] is None and
+            (row, col) not in attacked_squares and  # cannot castle through check
+            board[row][col - 1] is None and (row, col - 1) not in attacked_squares and
+            board[row][col - 2] is None and (row, col - 2) not in attacked_squares and
+            board[row][col - 3] is None and (row, col - 3) not in attacked_squares and
             isinstance(board[row][0], Rook) and
             not board[row][0].is_moved and
             board[row][0].color == self.color
