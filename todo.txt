@@ -1,6 +1,20 @@
+✅king move
+    king cannot move to an attacked square
+✅castling
+    cannot castle if checked or squares between are attacked
 pins
-checks
+    if a piece is attacked:
+        check who is attacking and check if the was not there is the king checked.
+        if it is that piece cannot move
+checks✅
+    if king is checked only move:
+        - block the check✅
+        - capture the checking piece✅
+        - move the king ✅
+            - king cannot move on the opposite direction of the check. That would be still check.✅
 promotions
-
+    if pawn reaches the opposite end promote it to a queen (or to a players selected piece)
 checkmate
+    there is no possible moves and the king is checked
 stalemate
+    there is no possible moves and the king is NOT checked
