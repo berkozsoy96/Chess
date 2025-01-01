@@ -60,7 +60,7 @@ class ChessUI:
                 text=f,
                 font_name="Arial",
                 font_size=15,
-                x=(i) * self.square_size + 5,
+                x=(i+1) * self.square_size - 15,
                 y=10,
                 color=(50, 50, 50)
             ) for i, f in enumerate(FILES)
