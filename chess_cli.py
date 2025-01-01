@@ -14,16 +14,20 @@ class Chess:
         self.half_move_clock = int(half_move_clock)
         self.full_move_clock = int(full_move_clock)
         self.attacked_squares: dict[str, list[tuple[int, int]]]
+        self.legal_moves: list[str] = []
+        self.moved_pieces: list[Piece] = []
         
+        self.previous_castling: list[bool] = None
+        self.previous_enpassant: str = None
+
         self.kings: tuple[Piece, Piece] = (None, None)
-        self.checking_pieces_squares: list[Piece] = []  # bu listenin uzunluğu 0, 1 veya 2 olabilir daha fazlası olursa hata var demektir.
         self.get_kings()
         
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
 
-    def parse_pieces(self, fen_piece_part: str):
+    def parse_pieces(self, fen_piece_part: str) -> list[list[Piece | None]]:
         rows = fen_piece_part.split('/')
         board = [[None for _ in range(8)] for _ in range(8)]
 
@@ -40,7 +44,7 @@ class Chess:
                     c += 1
         return board
     
-    def create_piece(self, piece_type: str, color: str, position: tuple):
+    def create_piece(self, piece_type: str, color: str, position: tuple) -> Piece:
         piece_classes = {
             'p': Pawn,
             'r': Rook,
@@ -90,6 +94,7 @@ class Chess:
         """
         Make a move on the board using algebraic notation, e.g., 'e2e4'.
         """
+        self.moved_pieces = []
         # check if move is valid
         if (len(move) != 4) or \
             (move[0] not in FILES) or \
@@ -116,8 +121,12 @@ class Chess:
             # print("Move is not valid!")
             return False
 
+        self.previous_castling = self.castling.copy()
+        self.previous_enpassant = self.enpassant
+
+        self.moved_pieces.append(piece)
+        self.moved_pieces.append(target_piece)
         self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col)
-        
         # update the board
         self.board[end_row][end_col] = piece
         self.board[start_row][start_col] = None
@@ -129,7 +138,7 @@ class Chess:
         self.turn = 1 - self.turn
         self.full_move_clock += 1 if self.turn == 0 else 0
         self.half_move_clock = 0 if isinstance(piece, Pawn) else self.half_move_clock + 1
-        self.print_board()
+        # self.print_board()
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
@@ -153,11 +162,13 @@ class Chess:
                 self.board[end_row][end_col-1] = rook
                 self.board[end_row][-1] = None
                 rook.move((end_row, end_col-1))
+                self.moved_pieces.append(rook)
             else:
                 rook = self.board[end_row][0]
                 self.board[end_row][end_col+1] = rook
                 self.board[end_row][0] = None
                 rook.move((end_row, end_col+1))
+                self.moved_pieces.append(rook)
             if piece.color == "w":
                 self.castling[0] = False
                 self.castling[1] = False
@@ -166,43 +177,65 @@ class Chess:
                 self.castling[3] = False
             self.enpassant = "-"
         elif isinstance(piece, King):
-            if not piece.is_moved:
-                if piece.color == "w":
-                    self.castling[0] = False
-                    self.castling[1] = False
-                else:
-                    self.castling[2] = False
-                    self.castling[3] = False
+            if piece.color == "w":
+                self.castling[0] = False
+                self.castling[1] = False
+            else:
+                self.castling[2] = False
+                self.castling[3] = False
             self.enpassant = "-"
         elif isinstance(piece, Rook):
-            if not piece.is_moved:
-                match (piece.color, piece.is_king_side):
-                    case ("w", True):
-                        self.castling[0] = False
-                    case ("w", False):
-                        self.castling[1] = False
-                    case ("b", True):
-                        self.castling[2] = False
-                    case ("b", False):
-                        self.castling[3] = False
-                    case _:
-                        print("HUH!!!", piece.color, piece.is_king_side)
+            match (piece.color, piece.position[1]):
+                case ("w", 7):
+                    self.castling[0] = False
+                case ("w", 0):
+                    self.castling[1] = False
+                case ("b", 7):
+                    self.castling[2] = False
+                case ("b", 0):
+                    self.castling[3] = False
             self.enpassant = "-"
         elif isinstance(target_piece, Rook):
-            match (target_piece.color, target_piece.is_king_side):
-                case ("w", True):
+            match (target_piece.color, target_piece.position[1]):
+                case ("w", 7):
                     self.castling[0] = False
-                case ("w", False):
+                case ("w", 0):
                     self.castling[1] = False
-                case ("b", True):
+                case ("b", 7):
                     self.castling[2] = False
-                case ("b", False):
+                case ("b", 0):
                     self.castling[3] = False
-                case _:
-                    print("HUH!!!", target_piece.color, target_piece.is_king_side)
             self.enpassant = "-"
         else:
             self.enpassant = "-"
+
+    def undo_move(self):
+        if not self.moved_pieces:
+            return
+        p = self.moved_pieces[0]
+        self.board[p.position[0]][p.position[1]] = None
+        self.board[p.previous_position[0]][p.previous_position[1]] = p
+        p.undo_move()
+
+        if self.moved_pieces[1]:
+            p = self.moved_pieces[1]
+            self.board[p.position[0]][p.position[1]] = p
+
+        if len(self.moved_pieces) == 3:
+            p = self.moved_pieces[2]
+            self.board[p.position[0]][p.position[1]] = None
+            self.board[p.previous_position[0]][p.previous_position[1]] = p
+            p.undo_move()
+        
+        self.moved_pieces = []
+        self.castling = self.previous_castling.copy()
+        self.enpassant = self.previous_enpassant
+        self.turn = 1 - self.turn
+        self.full_move_clock -= 1 if self.turn == 0 else 0
+        self.half_move_clock = 0 if self.turn == 0 else self.half_move_clock - 1
+        self.get_attacked_squares()
+        self.check_check()
+        self.get_possible_moves()
 
     def check_check(self):
         self.checking_pieces = []
@@ -212,7 +245,12 @@ class Chess:
                 self.checking_pieces.append(self.board[row][col])
 
     def get_possible_moves(self) -> None:
-        [c.calculate_possible_moves(self.board, self.attacked_squares, self.checking_pieces, self.kings[self.turn].position, self.castling, self.enpassant) for r in self.board for c in r if c and c.color == self.colors[self.turn]]
+        self.legal_moves = []
+        for r in self.board:
+            for c in r:
+                if c and c.color == self.colors[self.turn]:
+                    c.calculate_possible_moves(self.board, self.attacked_squares, self.checking_pieces, self.kings[self.turn].position, self.castling, self.enpassant)
+                    self.legal_moves.extend([f"{c.position_as_notation}{position_to_notation(m)}" for m in c.possible_moves])
 
     def get_attacked_squares(self) -> None:
         self.attacked_squares = {}
