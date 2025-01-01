@@ -2,10 +2,10 @@
     king cannot move to an attacked square
 ✅castling
     cannot castle if checked or squares between are attacked
-pins
+✅pins
     if a piece is attacked:
-        check who is attacking and check if the was not there is the king checked.
-        if it is that piece cannot move
+        check who is attacking and check if the piece was not there will the king be checked.
+        if it is that piece cannot move in different direction that attacked direction
 checks✅
     if king is checked only move:
         - block the check✅
