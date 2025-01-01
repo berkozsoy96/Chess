@@ -3,27 +3,31 @@ from utils import notation_to_position, position_to_notation, FILES, RANKS
 class Piece:
     def __init__(self, color: str, position: tuple[int, int]):
         self.color: str = color
-        self.is_moved: bool = False  # store if the piece is ever moved. This stays true even if piece returns to its original place.
-
         self.position: tuple[int, int] = position  # (r, c) - (rank, file)
         self.position_as_notation: str = position_to_notation(self.position)
+        self.previous_position: tuple[int, int] = None
         
         self.possible_moves: list[tuple[int, int]] = []
         self.attacked_squares: list[tuple[int, int]] = []
     
     def move(self, pos: tuple[int, int]) -> None:
+        self.previous_position = self.position
         self.position = pos
         self.position_as_notation = f"{FILES[pos[1]]}{RANKS[pos[0]]}"
-        self.is_moved = True
+
+    def undo_move(self) -> None:
+        self.position = self.previous_position
+        self.position_as_notation = f"{FILES[self.position[1]]}{RANKS[self.position[0]]}"
+        self.previous_position = None
 
     def symbol(self) -> str:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def check_if_move_blocks_or_captures(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int], is_current_piece_king: bool = False) -> bool:
+    def move_blocks_or_captures_the_checking_piece(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int], is_current_piece_king: bool = False) -> bool:
+        checking_piece_square = checking_piece.position
         if isinstance(checking_piece, (Knight, Pawn)):
             return move == checking_piece_square
         
-        checking_piece_square = checking_piece.position
         direction = (checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
         if is_current_piece_king:
             opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
@@ -33,14 +37,14 @@ class Piece:
                 return move == checking_piece_square
             if move[0] == king_square[0]:
                 l, r = min(king_square[1], checking_piece_square[1]), max(king_square[1], checking_piece_square[1])
-                if l < move[1] < r:
+                if l < move[1] < r or move[1] == checking_piece_square[1]:
                     return True
         elif direction[1] == 0: # Vertical check
             if abs(direction[0]) == 1:
                 return move == checking_piece_square
             if move[1] == king_square[1]:
                 t, b = min(king_square[0], checking_piece_square[0]), max(king_square[0], checking_piece_square[0])
-                if t < move[0] < b:
+                if t < move[0] < b or move[0] == checking_piece_square[0]:
                     return True
         else:  # diagonal check
             if abs(direction[0]) == 1:
@@ -49,8 +53,36 @@ class Piece:
             vd = 1 if direction[0] > 0 else -1
             # horizontal direction from king to checking piece
             hd = 1 if direction[1] > 0 else -1
-            for i in range(1, abs(direction[0])):
+            for i in range(1, abs(direction[0])+1):
                 if move == (king_square[0] + i*vd, king_square[1] + i*hd):
+                    return True
+        return False
+
+    def move_brokes_pin(self, move: tuple[int, int], board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], king_square: tuple[int, int]) -> bool:
+        attacking_pieces: list[Piece] = []
+        for source, squares in attacked_squares.items():
+            if self.position in squares:
+                row, col = notation_to_position(source)
+                attacking_pieces.append(board[row][col])
+
+        for piece in attacking_pieces:
+            if isinstance(piece, (Knight, Pawn, King)):
+                continue
+            if (self.position[0] == piece.position[0]) and (self.position[0] == king_square[0]):
+                l, r = min(king_square[1], piece.position[1]), max(king_square[1], piece.position[1])
+                if l < self.position[1] < r:
+                    if (move[0] != self.position[0]) or not (l < move[1] < r):
+                        return True
+            if (self.position[1] == piece.position[1]) and (self.position[1] == king_square[1]):
+                t, b = min(king_square[0], piece.position[0]), max(king_square[0], piece.position[0])
+                if t < self.position[0] < b:
+                    if (move[1] != self.position[1]) and not (t < move[0] < b):
+                        return True
+            if abs(king_square[0] - piece.position[0]) == abs(king_square[1] - piece.position[1]):
+                vd = 1 if piece.position[0] - king_square[0] > 0 else -1
+                hd = 1 if piece.position[1] - king_square[1] > 0 else -1
+                possible_moves = [(king_square[0] + i*vd, king_square[1] + i*hd) for i in range(1, abs(piece.position[0] - king_square[0])+1)]
+                if self.position in possible_moves and move not in possible_moves:
                     return True
         return False
 
@@ -78,7 +110,7 @@ class Pawn(Piece):
             self.possible_moves.append((row + direction, col))
 
             # Double forward movement if on starting rank
-            if (not self.is_moved) and (board[row + 2 * direction][col] is None):
+            if ((self.position[0] == 1 and self.color == "b") or (self.position[0] == 6 and self.color == "w")) and (board[row + 2 * direction][col] is None):
                 self.possible_moves.append((row + 2 * direction, col))
 
         # Captures
@@ -95,13 +127,19 @@ class Pawn(Piece):
             if abs(en_col - col) == 1 and en_row == row + direction:
                 self.possible_moves.append((en_row, en_col))
         
+        filtered_moves = []
+        for move in self.possible_moves:
+            if not self.move_brokes_pin(move, board, attacked_squares, king_square):
+                filtered_moves.append(move)
+        self.possible_moves = filtered_moves
+
         if len(checking_pieces) == 0:
             return
 
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.check_if_move_blocks_or_captures(move, checking_pieces[0], king_square):
+            if self.move_blocks_or_captures_the_checking_piece(move, checking_pieces[0], king_square):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -116,11 +154,7 @@ class Pawn(Piece):
                 self.attacked_squares.append((row + direction, new_col))
 
 
-class Rook(Piece):
-    def __init__(self, color, position):
-        super().__init__(color, position)
-        self.is_king_side = False if position[1] == 0 else True
-    
+class Rook(Piece): 
     def symbol(self):
         return "R" if self.color == 'w' else "r"
 
@@ -157,13 +191,19 @@ class Rook(Piece):
                 new_row += dr
                 new_col += dc
         
+        filtered_moves = []
+        for move in self.possible_moves:
+            if not self.move_brokes_pin(move, board, attacked_squares, king_square):
+                filtered_moves.append(move)
+        self.possible_moves = filtered_moves
+        
         if len(checking_pieces) == 0:
             return
 
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.check_if_move_blocks_or_captures(move, checking_pieces[0], king_square):
+            if self.move_blocks_or_captures_the_checking_piece(move, checking_pieces[0], king_square):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -220,13 +260,19 @@ class Knight(Piece):
                 if not target_piece or target_piece.color != self.color:
                     self.possible_moves.append((new_row, new_col))
         
+        filtered_moves = []
+        for move in self.possible_moves:
+            if not self.move_brokes_pin(move, board, attacked_squares, king_square):
+                filtered_moves.append(move)
+        self.possible_moves = filtered_moves
+        
         if len(checking_pieces) == 0:
             return
 
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.check_if_move_blocks_or_captures(move, checking_pieces[0], king_square):
+            if self.move_blocks_or_captures_the_checking_piece(move, checking_pieces[0], king_square):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -284,14 +330,20 @@ class Bishop(Piece):
                 # Move further in the current direction
                 new_row += dr
                 new_col += dc
-            
+        
+        filtered_moves = []
+        for move in self.possible_moves:
+            if not self.move_brokes_pin(move, board, attacked_squares, king_square):
+                filtered_moves.append(move)
+        self.possible_moves = filtered_moves
+        
         if len(checking_pieces) == 0:
             return
 
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.check_if_move_blocks_or_captures(move, checking_pieces[0], king_square):
+            if self.move_blocks_or_captures_the_checking_piece(move, checking_pieces[0], king_square):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -356,13 +408,19 @@ class Queen(Piece):
                 new_row += dr
                 new_col += dc
         
+        filtered_moves = []
+        for move in self.possible_moves:
+            if not self.move_brokes_pin(move, board, attacked_squares, king_square):
+                filtered_moves.append(move)
+        self.possible_moves = filtered_moves
+        
         if len(checking_pieces) == 0:
             return
 
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.check_if_move_blocks_or_captures(move, checking_pieces[0], king_square):
+            if self.move_blocks_or_captures_the_checking_piece(move, checking_pieces[0], king_square):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -423,14 +481,15 @@ class King(Piece):
                     self.possible_moves.append((new_row, new_col))
 
         # Check castling possibilities
-        if not self.is_moved:
-            if self.color == 'w':
+        if self.color == 'w':
+            if self.position_as_notation == "e1":
                 # White castling
                 if castling[0] and self.can_castle_kingside(board, asf, row, col):
                     self.possible_moves.append((row, col + 2))
                 if castling[1] and self.can_castle_queenside(board, asf, row, col):
                     self.possible_moves.append((row, col - 2))
-            else:
+        else:
+            if self.position_as_notation == "e8":
                 # Black castling
                 if castling[2] and self.can_castle_kingside(board, asf, row, col):
                     self.possible_moves.append((row, col + 2))
@@ -444,7 +503,7 @@ class King(Piece):
         filtered_moves = []
         for checing_piece in checking_pieces:
             for move in self.possible_moves:
-                if self.check_if_move_blocks_or_captures(move, checing_piece, king_square, True):
+                if self.move_blocks_or_captures_the_checking_piece(move, checing_piece, king_square, True):
                     filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -456,7 +515,6 @@ class King(Piece):
             board[row][col + 1] is None and (row, col + 1) not in attacked_squares and
             board[row][col + 2] is None and (row, col + 2) not in attacked_squares and
             isinstance(board[row][7], Rook) and
-            not board[row][7].is_moved and
             board[row][7].color == self.color
         )
 
@@ -469,7 +527,6 @@ class King(Piece):
             board[row][col - 2] is None and (row, col - 2) not in attacked_squares and
             board[row][col - 3] is None and (row, col - 3) not in attacked_squares and
             isinstance(board[row][0], Rook) and
-            not board[row][0].is_moved and
             board[row][0].color == self.color
         )
 
