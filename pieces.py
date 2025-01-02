@@ -5,33 +5,32 @@ class Piece:
         self.color: str = color
         self.position: tuple[int, int] = position  # (r, c) - (rank, file)
         self.position_as_notation: str = position_to_notation(self.position)
-        self.previous_position: tuple[int, int] = None
+        self.previous_positions: list[tuple[int, int]] = []
         
         self.possible_moves: list[tuple[int, int]] = []
         self.attacked_squares: list[tuple[int, int]] = []
     
     def move(self, pos: tuple[int, int]) -> None:
-        self.previous_position = self.position
+        self.previous_positions.append(self.position)
         self.position = pos
         self.position_as_notation = f"{FILES[pos[1]]}{RANKS[pos[0]]}"
 
     def undo_move(self) -> None:
-        self.position = self.previous_position
+        if len(self.previous_positions) == 0:
+            return
+        last_pos = self.previous_positions.pop()
+        self.position = last_pos
         self.position_as_notation = f"{FILES[self.position[1]]}{RANKS[self.position[0]]}"
-        self.previous_position = None
 
     def symbol(self) -> str:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
-    def move_blocks_or_captures_the_checking_piece(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int], is_current_piece_king: bool = False) -> bool:
+    def move_blocks_or_captures_the_checking_piece(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int]) -> bool:
         checking_piece_square = checking_piece.position
         if isinstance(checking_piece, (Knight, Pawn)):
             return move == checking_piece_square
         
         direction = (checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
-        if is_current_piece_king:
-            opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
-            return move != (king_square[0] + opposite_direction[0], king_square[1] + opposite_direction[1])
         if direction[0] == 0:  # Horizontal check
             if abs(direction[1]) == 1:
                 return move == checking_piece_square
@@ -64,25 +63,35 @@ class Piece:
             if self.position in squares:
                 row, col = notation_to_position(source)
                 attacking_pieces.append(board[row][col])
+        
 
         for piece in attacking_pieces:
             if isinstance(piece, (Knight, Pawn, King)):
                 continue
             if (self.position[0] == piece.position[0]) and (self.position[0] == king_square[0]):
                 l, r = min(king_square[1], piece.position[1]), max(king_square[1], piece.position[1])
-                if l < self.position[1] < r:
+                empty_squares = [sq is None for sq in [board[self.position[0]][c] for c in range(l+1, r)] if sq is not self]
+                if not empty_squares:
+                    empty_squares = [False]
+                if l < self.position[1] < r and all(empty_squares):
                     if (move[0] != self.position[0]) or not (l < move[1] < r):
                         return True
             if (self.position[1] == piece.position[1]) and (self.position[1] == king_square[1]):
                 t, b = min(king_square[0], piece.position[0]), max(king_square[0], piece.position[0])
-                if t < self.position[0] < b:
-                    if (move[1] != self.position[1]) and not (t < move[0] < b):
+                empty_squares = [sq is None for sq in [board[r][self.position[1]] for r in range(t+1, b)] if sq is not self]
+                if not empty_squares:
+                    empty_squares = [False]
+                if t < self.position[0] < b and all(empty_squares):
+                    if (move[1] != self.position[1]) or not (t < move[0] < b):
                         return True
             if abs(king_square[0] - piece.position[0]) == abs(king_square[1] - piece.position[1]):
                 vd = 1 if piece.position[0] - king_square[0] > 0 else -1
                 hd = 1 if piece.position[1] - king_square[1] > 0 else -1
                 possible_moves = [(king_square[0] + i*vd, king_square[1] + i*hd) for i in range(1, abs(piece.position[0] - king_square[0])+1)]
-                if self.position in possible_moves and move not in possible_moves:
+                empty_squares = [sq is None for sq in [board[move[0]][move[1]] for move in possible_moves[:-1]] if sq is not self]
+                if not empty_squares:
+                    empty_squares = [False]
+                if self.position in possible_moves and move not in possible_moves and all(empty_squares):
                     return True
         return False
 
@@ -501,10 +510,15 @@ class King(Piece):
 
         # Filter moves that counters the check
         filtered_moves = []
-        for checing_piece in checking_pieces:
+        for checking_piece in checking_pieces:
+            checking_piece_square = checking_piece.position
+            direction = (checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
             for move in self.possible_moves:
-                if self.move_blocks_or_captures_the_checking_piece(move, checing_piece, king_square, True):
-                    filtered_moves.append(move)
+                if not isinstance(checking_piece, (Knight, Pawn)):
+                    opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
+                    if (move == (king_square[0] + opposite_direction[0], king_square[1] + opposite_direction[1])):
+                        continue
+                filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
     def can_castle_kingside(self, board: list[list["Piece"]], attacked_squares: list[tuple[int, int]], row: int, col: int) -> bool:

@@ -292,6 +292,8 @@ class ChessUI:
 
 
 if __name__ == "__main__":
+    # chess_game = Chess(fen="rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8")
+    # chess_game = Chess(fen="8/8/3p4/KPp4r/1R3p1k/4P3/6P1/8 w - c6 0 1")
     chess_game = Chess()
     ui = ChessUI(chess_game)
     ui.run()

@@ -7,15 +7,17 @@ class Chess:
 
         fen_string = fen if fen else "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
         pieces, turn, castling, enpassant, half_move_clock, full_move_clock = fen_string.split()
+        self.game_over = False
         self.board: list[list[Piece]] = self.parse_pieces(pieces)
         self.turn = self.colors.index(turn)
         self.castling: list[bool] = self.parse_castling(castling)
         self.enpassant = enpassant
         self.half_move_clock = int(half_move_clock)
         self.full_move_clock = int(full_move_clock)
+        self.checking_pieces: list[Piece] = []
         self.attacked_squares: dict[str, list[tuple[int, int]]]
         self.legal_moves: list[str] = []
-        self.moved_pieces: list[Piece] = []
+        self.moved_pieces: list[list[Piece]] = []
         
         self.previous_castling: list[bool] = None
         self.previous_enpassant: str = None
@@ -26,6 +28,25 @@ class Chess:
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
+        self.is_game_over()
+
+    def is_game_over(self):
+        pieces_on_board = []
+        for r in self.board:
+            for c in r:
+                if c:
+                    pieces_on_board.append(c)
+        if len(pieces_on_board) == 2:
+            self.game_over = True  # stalemate
+            # print("Stalemate! The game is a draw.")
+        if len(self.legal_moves) == 0:
+            self.game_over = True  # stalemate or checkmate
+            if len(self.checking_pieces) > 0:
+                # print(f"Checkmate! {self.colors[1 - self.turn]} wins!")
+                pass
+            else:
+                self.legal_moves = []
+                # print("Stalemate! The game is a draw.")
 
     def parse_pieces(self, fen_piece_part: str) -> list[list[Piece | None]]:
         rows = fen_piece_part.split('/')
@@ -94,7 +115,9 @@ class Chess:
         """
         Make a move on the board using algebraic notation, e.g., 'e2e4'.
         """
-        self.moved_pieces = []
+        # moved pieces
+        mp = []
+
         # check if move is valid
         if (len(move) != 4) or \
             (move[0] not in FILES) or \
@@ -124,9 +147,11 @@ class Chess:
         self.previous_castling = self.castling.copy()
         self.previous_enpassant = self.enpassant
 
-        self.moved_pieces.append(piece)
-        self.moved_pieces.append(target_piece)
-        self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col)
+        mp.append(piece)
+        mp.append(target_piece)
+        self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col, mp)
+        self.moved_pieces.append(mp)
+
         # update the board
         self.board[end_row][end_col] = piece
         self.board[start_row][start_col] = None
@@ -142,18 +167,23 @@ class Chess:
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
+        self.is_game_over()
         return True
 
-    def check_special_cases(self, piece: Piece, target_piece: Piece, start_row: int, start_col: int, end_row: int, end_col: int):
+    def check_special_cases(self, piece: Piece, target_piece: Piece, start_row: int, start_col: int, end_row: int, end_col: int, mp: list[Piece]):
         if isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
             # check if pawn moved 2 sq and update enpassant
             self.enpassant = position_to_notation((end_row+1, end_col)) if piece.color == "w" else position_to_notation((end_row-1, end_col))
         elif isinstance(piece, Pawn) and position_to_notation((end_row, end_col)) == self.enpassant:
             # check for enpassant capturing
             if piece.color == "w":
+                pawn = self.board[end_row+1][end_col]
                 self.board[end_row+1][end_col] = None
+                mp[1] = pawn
             else:
+                pawn = self.board[end_row-1][end_col]
                 self.board[end_row-1][end_col] = None
+                mp[1] = pawn
             self.enpassant = "-"
         elif isinstance(piece, King) and abs(end_col-start_col) == 2:
             # check for castling
@@ -162,13 +192,13 @@ class Chess:
                 self.board[end_row][end_col-1] = rook
                 self.board[end_row][-1] = None
                 rook.move((end_row, end_col-1))
-                self.moved_pieces.append(rook)
+                mp.append(rook)
             else:
                 rook = self.board[end_row][0]
                 self.board[end_row][end_col+1] = rook
                 self.board[end_row][0] = None
                 rook.move((end_row, end_col+1))
-                self.moved_pieces.append(rook)
+                mp.append(rook)
             if piece.color == "w":
                 self.castling[0] = False
                 self.castling[1] = False
@@ -210,24 +240,25 @@ class Chess:
             self.enpassant = "-"
 
     def undo_move(self):
-        if not self.moved_pieces:
+        if len(self.moved_pieces) == 0:
             return
-        p = self.moved_pieces[0]
-        self.board[p.position[0]][p.position[1]] = None
-        self.board[p.previous_position[0]][p.previous_position[1]] = p
-        p.undo_move()
+        last_moved_pieces = self.moved_pieces.pop()
 
-        if self.moved_pieces[1]:
-            p = self.moved_pieces[1]
+        p = last_moved_pieces[0]
+        self.board[p.position[0]][p.position[1]] = None
+        p.undo_move()
+        self.board[p.position[0]][p.position[1]] = p
+
+        if last_moved_pieces[1]:
+            p = last_moved_pieces[1]
             self.board[p.position[0]][p.position[1]] = p
 
-        if len(self.moved_pieces) == 3:
-            p = self.moved_pieces[2]
+        if len(last_moved_pieces) == 3:
+            p = last_moved_pieces[2]
             self.board[p.position[0]][p.position[1]] = None
-            self.board[p.previous_position[0]][p.previous_position[1]] = p
             p.undo_move()
+            self.board[p.position[0]][p.position[1]] = p
         
-        self.moved_pieces = []
         self.castling = self.previous_castling.copy()
         self.enpassant = self.previous_enpassant
         self.turn = 1 - self.turn
@@ -236,6 +267,7 @@ class Chess:
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
+        self.is_game_over()
 
     def check_check(self):
         self.checking_pieces = []
