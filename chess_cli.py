@@ -1,6 +1,7 @@
 from utils import notation_to_position, position_to_notation, FILES, RANKS
 from pieces import Piece, Pawn, Rook, Knight, Bishop, Queen, King
 
+
 class Chess:
     def __init__(self, fen: str = None):
         self.colors = ["w", "b"]
@@ -18,13 +19,13 @@ class Chess:
         self.attacked_squares: dict[str, list[tuple[int, int]]]
         self.legal_moves: list[str] = []
         self.moved_pieces: list[list[Piece]] = []
-        
-        self.previous_castling: list[bool] = None
-        self.previous_enpassant: str = None
+
+        self.previous_castlings: list[list[bool]] = []
+        self.previous_enpassants: list[str] = []
 
         self.kings: tuple[Piece, Piece] = (None, None)
         self.get_kings()
-        
+
         self.get_attacked_squares()
         self.check_check()
         self.get_possible_moves()
@@ -64,7 +65,7 @@ class Chess:
                     board[r][c] = piece
                     c += 1
         return board
-    
+
     def create_piece(self, piece_type: str, color: str, position: tuple) -> Piece:
         piece_classes = {
             'p': Pawn,
@@ -96,7 +97,7 @@ class Chess:
             "k" in castling,
             "q" in castling
         ]
-        
+
     def print_board(self):
         for r in self.board:
             for c in r:
@@ -122,7 +123,7 @@ class Chess:
         if (move[0] not in FILES) or \
             (move[1] not in RANKS) or \
             (move[2] not in FILES) or \
-            (move[3] not in RANKS):
+                (move[3] not in RANKS):
             print(f"{move} is not a valid string. Valid string example: 'e2e4'.")
             return False
 
@@ -146,8 +147,8 @@ class Chess:
             # print("Move is not valid!")
             return False
 
-        self.previous_castling = self.castling.copy()
-        self.previous_enpassant = self.enpassant
+        self.previous_castlings.append(self.castling.copy())
+        self.previous_enpassants.append(self.enpassant)
 
         mp.append(piece)
         mp.append(target_piece)
@@ -156,16 +157,18 @@ class Chess:
         self.board[end_row][end_col] = piece
         self.board[start_row][start_col] = None
 
-        self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col, mp, promotion)
+        self.check_special_cases(
+            piece, target_piece, start_row, start_col, end_row, end_col, mp, promotion)
         self.moved_pieces.append(mp)
-        
+
         # move the piece
         piece.move((end_row, end_col))
 
         # Update turn and move counters
         self.turn = 1 - self.turn
         self.full_move_clock += 1 if self.turn == 0 else 0
-        self.half_move_clock = 0 if isinstance(piece, Pawn) else self.half_move_clock + 1
+        self.half_move_clock = 0 if isinstance(
+            piece, Pawn) else self.half_move_clock + 1
         # self.print_board()
         self.get_attacked_squares()
         self.check_check()
@@ -182,11 +185,13 @@ class Chess:
                 'q': Queen,
             }
             # check if pawn reached the end of the board
-            promoted_piece = promotion_classes[promotion](piece.color, (end_row, end_col))
+            promoted_piece = promotion_classes[promotion](
+                piece.color, (end_row, end_col))
             self.board[end_row][end_col] = promoted_piece
         elif isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
             # check if pawn moved 2 sq and update enpassant
-            self.enpassant = position_to_notation((end_row+1, end_col)) if piece.color == "w" else position_to_notation((end_row-1, end_col))
+            self.enpassant = position_to_notation(
+                (end_row+1, end_col)) if piece.color == "w" else position_to_notation((end_row-1, end_col))
         elif isinstance(piece, Pawn) and position_to_notation((end_row, end_col)) == self.enpassant:
             # check for enpassant capturing
             if piece.color == "w":
@@ -271,9 +276,9 @@ class Chess:
             self.board[p.position[0]][p.position[1]] = None
             p.undo_move()
             self.board[p.position[0]][p.position[1]] = p
-        
-        self.castling = self.previous_castling.copy()
-        self.enpassant = self.previous_enpassant
+
+        self.castling = self.previous_castlings.pop()
+        self.enpassant = self.previous_enpassants.pop()
         self.turn = 1 - self.turn
         self.full_move_clock -= 1 if self.turn == 0 else 0
         self.half_move_clock = 0 if self.turn == 0 else self.half_move_clock - 1
@@ -294,12 +299,14 @@ class Chess:
         for r in self.board:
             for c in r:
                 if c and c.color == self.colors[self.turn]:
-                    c.calculate_possible_moves(self.board, self.attacked_squares, self.checking_pieces, self.kings[self.turn].position, self.castling, self.enpassant)
-                    self.legal_moves.extend([f"{c.position_as_notation}{position_to_notation(m)}" for m in c.possible_moves])
+                    c.calculate_possible_moves(self.board, self.attacked_squares, self.checking_pieces,
+                                               self.kings[self.turn].position, self.castling, self.enpassant)
+                    self.legal_moves.extend(
+                        [f"{c.position_as_notation}{position_to_notation(m)}{m[2] if m[2] != '-' else ''}" for m in c.possible_moves])
 
     def get_attacked_squares(self) -> None:
         self.attacked_squares = {}
-        for r in self.board :
+        for r in self.board:
             for c in r:
                 if c and c.color == self.colors[1-self.turn]:
                     c.calculate_attacked_squares(self.board)

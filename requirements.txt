@@ -1,0 +1,3 @@
+pyglet==2.0.20
+stockfish==3.28.0
+python-dotenv==1.0.1
