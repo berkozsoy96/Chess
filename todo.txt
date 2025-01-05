@@ -12,7 +12,7 @@ checks✅
         - capture the checking piece✅
         - move the king ✅
             - king cannot move on the opposite direction of the check. That would be still check.✅
-promotions
+✅promotions
     if pawn reaches the opposite end promote it to a queen (or to a players selection)
 ✅checkmate
     there is no possible moves and the king is checked

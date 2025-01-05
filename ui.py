@@ -6,7 +6,7 @@ from pyglet.window import Window, mouse
 from pyglet.shapes import Rectangle, Circle, Arc
 from pyglet.graphics import Batch
 
-from chess_cli import Chess, Piece, position_to_notation, notation_to_position, FILES, RANKS
+from chess_cli import Chess, Piece, Pawn, position_to_notation, notation_to_position, FILES, RANKS
 
 class ChessUI:
     def __init__(self, chess_game):
@@ -142,7 +142,7 @@ class ChessUI:
         """
         highlight_color = (50, 50, 50)  # Green highlight
         for move in self.highlighted_squares:
-            row, col = move
+            row, col, _ = move
             if self.game.board[row][col]:
                 circle = Arc(
                     x=(col + .5) * self.square_size,
@@ -269,7 +269,11 @@ class ChessUI:
             row: int = 7 - (y // self.square_size)
             if self.source_sq:
                 target_pos = (row, col)
+                sr, sc = notation_to_position(self.source_sq)
                 move = f"{self.source_sq}{position_to_notation(target_pos)}"
+                if isinstance(self.game.board[sr][sc], Pawn) and row in [0, 7]:
+                    # TODO: Implement promotion selection instead of defaulting to Queen
+                    move += "q"  
                 if move[:2] != move[2:]:
                     if self.game.make_move(move):
                         self.create_sprites()

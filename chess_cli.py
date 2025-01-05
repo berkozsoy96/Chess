@@ -119,8 +119,7 @@ class Chess:
         mp = []
 
         # check if move is valid
-        if (len(move) != 4) or \
-            (move[0] not in FILES) or \
+        if (move[0] not in FILES) or \
             (move[1] not in RANKS) or \
             (move[2] not in FILES) or \
             (move[3] not in RANKS):
@@ -130,6 +129,9 @@ class Chess:
         # Parse the move
         (start_row, start_col) = notation_to_position(move[:2])
         (end_row, end_col) = notation_to_position(move[2:])
+        promotion = "-"
+        if len(move) == 5:
+            promotion = move[4]
 
         # Get the piece that will be moved
         piece = self.board[start_row][start_col]
@@ -140,7 +142,7 @@ class Chess:
         if piece.color != self.colors[self.turn]:
             # print(f"It is {self.colors[self.turn]}'s turn.")
             return False
-        if (end_row, end_col) not in piece.possible_moves:
+        if (end_row, end_col, promotion) not in piece.possible_moves:
             # print("Move is not valid!")
             return False
 
@@ -149,12 +151,13 @@ class Chess:
 
         mp.append(piece)
         mp.append(target_piece)
-        self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col, mp)
-        self.moved_pieces.append(mp)
 
         # update the board
         self.board[end_row][end_col] = piece
         self.board[start_row][start_col] = None
+
+        self.check_special_cases(piece, target_piece, start_row, start_col, end_row, end_col, mp, promotion)
+        self.moved_pieces.append(mp)
         
         # move the piece
         piece.move((end_row, end_col))
@@ -170,8 +173,18 @@ class Chess:
         self.is_game_over()
         return True
 
-    def check_special_cases(self, piece: Piece, target_piece: Piece, start_row: int, start_col: int, end_row: int, end_col: int, mp: list[Piece]):
-        if isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
+    def check_special_cases(self, piece: Piece, target_piece: Piece, start_row: int, start_col: int, end_row: int, end_col: int, mp: list[Piece], promotion: str):
+        if isinstance(piece, Pawn) and end_row in [0, 7]:
+            promotion_classes = {
+                'r': Rook,
+                'n': Knight,
+                'b': Bishop,
+                'q': Queen,
+            }
+            # check if pawn reached the end of the board
+            promoted_piece = promotion_classes[promotion](piece.color, (end_row, end_col))
+            self.board[end_row][end_col] = promoted_piece
+        elif isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
             # check if pawn moved 2 sq and update enpassant
             self.enpassant = position_to_notation((end_row+1, end_col)) if piece.color == "w" else position_to_notation((end_row-1, end_col))
         elif isinstance(piece, Pawn) and position_to_notation((end_row, end_col)) == self.enpassant:
@@ -295,6 +308,6 @@ class Chess:
 
 
 if __name__ == "__main__":
-    chess = Chess()
+    chess = Chess(fen="8/1P6/8/5k2/8/8/8/1K6 w - - 0 1")
     chess.print_game_info()
     chess.print_board()

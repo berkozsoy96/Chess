@@ -26,6 +26,7 @@ class Piece:
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def move_blocks_or_captures_the_checking_piece(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int]) -> bool:
+        move = (move[0], move[1])
         checking_piece_square = checking_piece.position
         if isinstance(checking_piece, (Knight, Pawn)):
             return move == checking_piece_square
@@ -58,6 +59,7 @@ class Piece:
         return False
 
     def move_brokes_pin(self, move: tuple[int, int], board: list[list["Piece"]], attacked_squares: dict[str, list[tuple[int, int]]], king_square: tuple[int, int]) -> bool:
+        move = (move[0], move[1])
         attacking_pieces: list[Piece] = []
         for source, squares in attacked_squares.items():
             if self.position in squares:
@@ -116,11 +118,17 @@ class Pawn(Piece):
         
         # Forward movement by 1
         if (0 <= row + direction < 8) and (board[row + direction][col] is None):
-            self.possible_moves.append((row + direction, col))
+            if row + direction == 0 or row + direction == 7:
+                self.possible_moves.append((row + direction, col, "n"))
+                self.possible_moves.append((row + direction, col, "r"))
+                self.possible_moves.append((row + direction, col, "b"))
+                self.possible_moves.append((row + direction, col, "q"))
+            else:
+                self.possible_moves.append((row + direction, col, "-"))
 
             # Double forward movement if on starting rank
             if ((self.position[0] == 1 and self.color == "b") or (self.position[0] == 6 and self.color == "w")) and (board[row + 2 * direction][col] is None):
-                self.possible_moves.append((row + 2 * direction, col))
+                self.possible_moves.append((row + 2 * direction, col, "-"))
 
         # Captures
         for dc in [-1, 1]:  # Diagonal left (-1) and right (+1)
@@ -128,13 +136,19 @@ class Pawn(Piece):
             if (0 <= new_col < 8) and (0 <= row + direction < 8):
                 target_piece = board[row + direction][new_col]
                 if target_piece and target_piece.color != self.color:
-                    self.possible_moves.append((row + direction, new_col))
+                    if row + direction == 0 or row + direction == 7:
+                        self.possible_moves.append((row + direction, new_col, "n"))
+                        self.possible_moves.append((row + direction, new_col, "r"))
+                        self.possible_moves.append((row + direction, new_col, "b"))
+                        self.possible_moves.append((row + direction, new_col, "q"))
+                    else:
+                        self.possible_moves.append((row + direction, new_col, "-"))
 
         # En Passant
         if enpassant != "-":
             en_row, en_col = notation_to_position(enpassant)
             if abs(en_col - col) == 1 and en_row == row + direction:
-                self.possible_moves.append((en_row, en_col))
+                self.possible_moves.append((en_row, en_col, "-"))
         
         filtered_moves = []
         for move in self.possible_moves:
@@ -187,10 +201,10 @@ class Rook(Piece):
 
                 if not target_piece:
                     # If the square is empty, add it to possible moves
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                 elif target_piece.color != self.color:
                     # If the square contains an opponent's piece, add it and stop further movement
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                     break
                 else:
                     # If the square contains a piece of the same color, stop further movement
@@ -267,7 +281,7 @@ class Knight(Piece):
 
                 # Add the move if the target square is empty or contains an opponent's piece
                 if not target_piece or target_piece.color != self.color:
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
         
         filtered_moves = []
         for move in self.possible_moves:
@@ -327,10 +341,10 @@ class Bishop(Piece):
 
                 if not target_piece:
                     # If the square is empty, add it to possible moves
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                 elif target_piece.color != self.color:
                     # If the square contains an opponent's piece, add it and stop further movement
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                     break
                 else:
                     # If the square contains a piece of the same color, stop further movement
@@ -404,10 +418,10 @@ class Queen(Piece):
 
                 if not target_piece:
                     # If the square is empty, add it to possible moves
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                 elif target_piece.color != self.color:
                     # If the square contains an opponent's piece, add it and stop further movement
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
                     break
                 else:
                     # If the square contains a piece of the same color, stop further movement
@@ -487,23 +501,23 @@ class King(Piece):
                     continue
                 if not target_piece or target_piece.color != self.color:
                     # Add square if empty or occupied by opponent
-                    self.possible_moves.append((new_row, new_col))
+                    self.possible_moves.append((new_row, new_col, "-"))
 
         # Check castling possibilities
         if self.color == 'w':
             if self.position_as_notation == "e1":
                 # White castling
                 if castling[0] and self.can_castle_kingside(board, asf, row, col):
-                    self.possible_moves.append((row, col + 2))
+                    self.possible_moves.append((row, col + 2, "-"))
                 if castling[1] and self.can_castle_queenside(board, asf, row, col):
-                    self.possible_moves.append((row, col - 2))
+                    self.possible_moves.append((row, col - 2, "-"))
         else:
             if self.position_as_notation == "e8":
                 # Black castling
                 if castling[2] and self.can_castle_kingside(board, asf, row, col):
-                    self.possible_moves.append((row, col + 2))
+                    self.possible_moves.append((row, col + 2, "-"))
                 if castling[3] and self.can_castle_queenside(board, asf, row, col):
-                    self.possible_moves.append((row, col - 2))
+                    self.possible_moves.append((row, col - 2, "-"))
         
         if len(checking_pieces) == 0:
             return
