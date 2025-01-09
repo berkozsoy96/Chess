@@ -25,7 +25,7 @@ def move_gen_test(depth, chess: Chess, max_depth, results):
 
 
 fen = "8/8/3p4/KPp4r/1R3p1k/4P3/6P1/8 w - c6 0 1"
-depth = 2
+depth = 6
 
 stockfish_results = {}
 move_count_line_matcher = re.compile(
@@ -36,23 +36,33 @@ bot.set_fen_position(fen)
 # bot.make_moves_from_current_position(["a2a3"])
 bot._put(f"go perft {depth}")
 
+print("Stockfish")
 while True:
     line = bot._read_line()
     res = move_count_line_matcher.match(line)
     if res:
+        print(line)
         move, count = res.groups()
         stockfish_results[move] = int(count)
     if "Nodes" in line:
         break
+print()
 
 chess = Chess(fen=fen)
 # chess.make_move("a2a3")
 my_engine_results = {}
+print("My Engine")
 result = move_gen_test(depth, chess, depth, my_engine_results)
+print()
 
+print(f"{fen = }")
+print(f"{depth = }")
 print("Results")
-print(f"{len(stockfish_results) = }")
-print(f"{len(my_engine_results) = }")
-for move in stockfish_results:
-    print(
-        f"{'✅' if stockfish_results[move] == my_engine_results[move] else '❌'} {move}: {stockfish_results[move]} {my_engine_results[move]}")
+print(f"{len(stockfish_results)=}", end=", ")
+print(f"{len(my_engine_results)=}", end=", ")
+print(f"{'✅' if len(my_engine_results) == len(stockfish_results) else '❌'}")
+print("Move: Sf - My")
+for move in list(set(list(stockfish_results.keys()) + list(my_engine_results.keys()))):
+    sfmc = stockfish_results.get(move, "-")
+    mymc = my_engine_results.get(move, "-")
+    print(f"{'✅' if str(sfmc) == str(mymc) else '❌'} {move: <5}: {str(sfmc): >6} - {str(mymc): >6}")
