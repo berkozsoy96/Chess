@@ -70,7 +70,7 @@ class Piece:
                 # if move is enpassant
                 if enpassant != "-":
                     en_row, en_col = notation_to_position(enpassant)
-                    if move == (en_row, en_col):
+                    if move == (en_row, en_col) and isinstance(self, Pawn):
                         return True
         return False
 
@@ -428,7 +428,7 @@ class Queen(Piece):
                 # Move further in the current direction
                 new_row += dr
                 new_col += dc
-
+        
         filtered_moves = []
         for move in self.possible_moves:
             if not self.move_brokes_pin(move, board, king_square, enpassant):
@@ -526,19 +526,20 @@ class King(Piece):
         if len(checking_pieces) == 0:
             return
 
-        # Filter moves that counters the check
         filtered_moves = []
-        for checking_piece in checking_pieces:
-            checking_piece_square = checking_piece.position
-            direction = (
-                checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
-            for move in self.possible_moves:
+        for move in self.possible_moves:
+            legal = True
+            for checking_piece in checking_pieces:
                 if not isinstance(checking_piece, (Knight, Pawn)):
-                    opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(
-                        direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
-                    if (move == (king_square[0] + opposite_direction[0], king_square[1] + opposite_direction[1], "-")):
-                        continue
+                    checking_piece_square = checking_piece.position
+                    direction = (checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
+                    opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
+                    if move == (king_square[0] + opposite_direction[0], king_square[1] + opposite_direction[1], "-"):
+                        legal = False
+                        break
+            if legal:
                 filtered_moves.append(move)
+
         self.possible_moves = filtered_moves
 
     def can_castle_kingside(self, board: list[list["Piece"]], attacked_squares: list[tuple[int, int]], row: int, col: int) -> bool:

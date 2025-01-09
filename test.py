@@ -33,7 +33,7 @@ move_count_line_matcher = re.compile(
 
 bot = Stockfish(os.getenv("STOCKFISH_PATH"))
 bot.set_fen_position(fen)
-# bot.make_moves_from_current_position(["a2a3"])
+# bot.make_moves_from_current_position(["h1f1"])
 bot._put(f"go perft {depth}")
 
 print("Stockfish")
@@ -49,7 +49,7 @@ while True:
 print()
 
 chess = Chess(fen=fen)
-# chess.make_move("a2a3")
+# chess.make_move("h1f1")
 my_engine_results = {}
 print("My Engine")
 result = move_gen_test(depth, chess, depth, my_engine_results)

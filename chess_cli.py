@@ -188,6 +188,7 @@ class Chess:
             promoted_piece = promotion_classes[promotion](
                 piece.color, (end_row, end_col))
             self.board[end_row][end_col] = promoted_piece
+            self.enpassant = "-"
         elif isinstance(piece, Pawn) and abs(end_row-start_row) == 2:
             # check if pawn moved 2 sq and update enpassant
             self.enpassant = position_to_notation(
