@@ -15,7 +15,7 @@ class ChessUI:
 
         self.window = Window(width=1000, height=800,
                              caption="Berk's Chess Game")
-        self.square_size = self.window.height // 8
+        self.square_size = 100
 
         # Initialize squares once
         # List to store Rectangle objects for each square
@@ -34,9 +34,17 @@ class ChessUI:
         self.foreground = Batch()
         self.create_sprites()
 
-        self.highlighted_squares = []  # To show possible moves
+        self.highlighted_squares: set[tuple[int, int]] = ()  # To show possible moves
         self.selected_sprite = None  # Store the sprite for the selected piece
         self.source_sq = None  # Store the currently selected piece
+        self.move = None
+
+        self.promotion_active = False  # Flag to indicate if promotion is active
+        self.promotion_sprites: list[Sprite] = []
+        self.promotion_symbols = ["q", "r", "b", "n"]
+        self.white_promotions = Batch()
+        self.black_promotions = Batch()
+        self.prepare_promotions()
 
         # Set event handlers
         self.window.on_draw = self.on_draw
@@ -125,6 +133,31 @@ class ChessUI:
         sprite.scale = self.square_size / texture.width
         self.sprites[(row, col)] = sprite
 
+    def prepare_promotions(self):
+        """
+        Prepare promotion options for the user to select.
+        """
+        for i, symbol in enumerate(self.promotion_symbols):
+            texture = self.textures[symbol]
+            sprite = Sprite(
+                texture,
+                x=850,
+                y=self.square_size * i,
+                batch=self.black_promotions
+            )
+            sprite.scale = self.square_size / texture.width
+            self.promotion_sprites.append(sprite)
+        for i, symbol in enumerate(self.promotion_symbols):
+            texture = self.textures[symbol.upper()]
+            sprite = Sprite(
+                texture,
+                x=850,
+                y=self.square_size * i,
+                batch=self.white_promotions
+            )
+            sprite.scale = self.square_size / texture.width
+            self.promotion_sprites.append(sprite)
+
     def draw_board(self):
         """
         Draw the chessboard squares (using pre-created rectangles).
@@ -149,7 +182,7 @@ class ChessUI:
         """
         highlight_color = (50, 50, 50)  # Green highlight
         for move in self.highlighted_squares:
-            row, col, _ = move
+            row, col = move
             if self.game.board[row][col]:
                 circle = Arc(
                     x=(col + .5) * self.square_size,
@@ -259,12 +292,23 @@ class ChessUI:
         # self.highlight_attaced_squares()
         self.draw_pieces()
         self.display_game_status()
+        if self.promotion_active:
+            self.white_promotions.draw() if self.game.turn == 0 else self.black_promotions.draw()
 
     def on_mouse_press(self, x, y, button, modifiers):
-        self.highlighted_squares = []
+        self.highlighted_squares = ()
         if button == mouse.LEFT:
             col: int = x // self.square_size
             row: int = 7 - (y // self.square_size)
+            if self.promotion_active:
+                if 850 < x < 950 and y < 400:
+                    promotion = self.promotion_symbols[7-row]
+                    self.move += promotion
+                    if self.game.make_move(self.move):
+                        self.create_sprites()
+                        self.highlighted_squares = ()
+                self.promotion_active = False
+                return
             piece = self.game.board[row][col]
             if piece:
                 self.source_sq = position_to_notation((row, col))
@@ -272,7 +316,7 @@ class ChessUI:
                 self.selected_sprite.update(
                     x-self.selected_sprite.width/2, y-self.selected_sprite.width/2)
                 if piece.color == self.game.colors[self.game.turn]:
-                    self.highlighted_squares = piece.possible_moves
+                    self.highlighted_squares = set([move[:2] for move in piece.possible_moves])
 
     def on_mouse_release(self, x, y, button, modifiers):
         if button == mouse.LEFT:
@@ -281,15 +325,15 @@ class ChessUI:
             if self.source_sq:
                 target_pos = (row, col)
                 sr, sc = notation_to_position(self.source_sq)
-                move = f"{self.source_sq}{position_to_notation(target_pos)}"
-                if isinstance(self.game.board[sr][sc], Pawn) and row in [0, 7]:
-                    # TODO: Implement promotion selection instead of defaulting to Queen
-                    move += "q"
-                if move[:2] != move[2:]:
-                    if self.game.make_move(move):
-                        self.create_sprites()
-                        self.highlighted_squares = []
-
+                self.move = f"{self.source_sq}{position_to_notation(target_pos)}"
+                if target_pos in self.highlighted_squares:
+                    if isinstance(self.game.board[sr][sc], Pawn) and row in [0, 7]:
+                        self.promotion_active = True
+                    else:
+                        if self.move[:2] != self.move[2:4]:
+                            if self.game.make_move(self.move):
+                                self.create_sprites()
+                                self.highlighted_squares = ()
                 orjrow, orjcol = notation_to_position(self.source_sq)
                 self.selected_sprite.batch = self.background
                 self.selected_sprite.update(
