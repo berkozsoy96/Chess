@@ -1,0 +1,9 @@
+fen = '7K/8/k1P5/7p/8/8/8/8 w - - 0 1'
+depth = 8
+Results
+len(stockfish_results)=4, len(my_engine_results)=4, ✅
+Move: Sf - My
+✅ h8g7 : 913525 - 913525
+✅ h8g8 : 563838 - 563838
+✅ h8h7 : 568186 - 568186
+✅ c6c7 : 1451362 - 1451362

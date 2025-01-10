@@ -309,6 +309,6 @@ class ChessUI:
 
 
 if __name__ == "__main__":
-    chess_game = Chess()
-    ui = ChessUI(chess_game)
+    chess = Chess()
+    ui = ChessUI(chess)
     ui.run()

@@ -1,0 +1,8 @@
+fen = '8/k7/3p4/p2P1p2/P2P1P2/8/8/K7 w - - 0 1'
+depth = 10
+Results
+len(stockfish_results)=3, len(my_engine_results)=3, ✅
+Move: Sf - My
+✅ a1a2 : 2190284 - 2190284
+✅ a1b2 : 3889708 - 3889708
+✅ a1b1 : 2679114 - 2679114

@@ -28,18 +28,26 @@ class Piece:
         raise NotImplementedError(
             "This method should be implemented by subclasses.")
 
-    def move_removes_check(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int]) -> bool:
+    def move_removes_check(self, move: tuple[int, int], checking_piece: "Piece", king_square: tuple[int, int], enpassant: str) -> bool:
         move = (move[0], move[1])
         checking_piece_square = checking_piece.position
-        if isinstance(checking_piece, (Knight, Pawn)):
+        if isinstance(checking_piece, Knight):
             return move == checking_piece_square
-
-        distance = (checking_piece.position[0] - king_square[0], checking_piece.position[1] - king_square[1])
-        direction = (distance[0]//abs(distance[0]) if distance[0] != 0 else 0, distance[1]//abs(distance[1]) if distance[1] != 0 else 0)
+        if isinstance(checking_piece, Pawn):
+            if enpassant != "-":
+                en_row, en_col = notation_to_position(enpassant)
+                if move == (en_row, en_col) and isinstance(self, Pawn):
+                    return True
+            return move == checking_piece_square
+        distance = (checking_piece.position[0] - king_square[0],
+                    checking_piece.position[1] - king_square[1])
+        direction = (distance[0]//abs(distance[0]) if distance[0] != 0 else 0,
+                     distance[1]//abs(distance[1]) if distance[1] != 0 else 0)
         in_between_squares = []
         for i in range(1, max(abs(distance[0]), abs(distance[1]))):
-            in_between_squares.append((king_square[0] + i * direction[0], king_square[1] + i * direction[1]))
-        
+            in_between_squares.append(
+                (king_square[0] + i * direction[0], king_square[1] + i * direction[1]))
+
         if move in in_between_squares or move == checking_piece_square:
             return True
         return False
@@ -52,17 +60,22 @@ class Piece:
                 if piece and piece.color != self.color and piece.is_enemy_king_in_vision:
                     pinning_pieces.append(piece)
         for piece in pinning_pieces:
-            distance = (piece.position[0] - king_square[0], piece.position[1] - king_square[1])
-            direction = (distance[0]//abs(distance[0]) if distance[0] != 0 else 0, distance[1]//abs(distance[1]) if distance[1] != 0 else 0)
+            distance = (piece.position[0] - king_square[0],
+                        piece.position[1] - king_square[1])
+            direction = (distance[0]//abs(distance[0]) if distance[0] != 0 else 0,
+                         distance[1]//abs(distance[1]) if distance[1] != 0 else 0)
             in_between_squares = []
             for i in range(1, max(abs(distance[0]), abs(distance[1]))):
-                in_between_squares.append((king_square[0] + i * direction[0], king_square[1] + i * direction[1]))
+                in_between_squares.append(
+                    (king_square[0] + i * direction[0], king_square[1] + i * direction[1]))
             if self.position not in in_between_squares:
                 continue
 
-            in_between_pieces = [board[sq[0]][sq[1]] for sq in in_between_squares]
+            in_between_pieces = [board[sq[0]][sq[1]]
+                                 for sq in in_between_squares]
             # in_between_pieces_count is minimum 1 which is self
-            in_between_pieces_count = len(in_between_pieces) - in_between_pieces.count(None)
+            in_between_pieces_count = len(
+                in_between_pieces) - in_between_pieces.count(None)
             if in_between_pieces_count == 1:
                 if move not in in_between_squares and move != piece.position:
                     return True
@@ -147,7 +160,7 @@ class Pawn(Piece):
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.move_removes_check(move, checking_pieces[0], king_square):
+            if self.move_removes_check(move, checking_pieces[0], king_square, enpassant):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -212,7 +225,7 @@ class Rook(Piece):
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.move_removes_check(move, checking_pieces[0], king_square):
+            if self.move_removes_check(move, checking_pieces[0], king_square, enpassant):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -286,7 +299,7 @@ class Knight(Piece):
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.move_removes_check(move, checking_pieces[0], king_square):
+            if self.move_removes_check(move, checking_pieces[0], king_square, enpassant):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -358,7 +371,7 @@ class Bishop(Piece):
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.move_removes_check(move, checking_pieces[0], king_square):
+            if self.move_removes_check(move, checking_pieces[0], king_square, enpassant):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -428,7 +441,7 @@ class Queen(Piece):
                 # Move further in the current direction
                 new_row += dr
                 new_col += dc
-        
+
         filtered_moves = []
         for move in self.possible_moves:
             if not self.move_brokes_pin(move, board, king_square, enpassant):
@@ -441,7 +454,7 @@ class Queen(Piece):
         # Filter moves that counters the check
         filtered_moves = []
         for move in self.possible_moves:
-            if self.move_removes_check(move, checking_pieces[0], king_square):
+            if self.move_removes_check(move, checking_pieces[0], king_square, enpassant):
                 filtered_moves.append(move)
         self.possible_moves = filtered_moves
 
@@ -532,8 +545,10 @@ class King(Piece):
             for checking_piece in checking_pieces:
                 if not isinstance(checking_piece, (Knight, Pawn)):
                     checking_piece_square = checking_piece.position
-                    direction = (checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
-                    opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
+                    direction = (
+                        checking_piece_square[0] - king_square[0], checking_piece_square[1] - king_square[1])
+                    opposite_direction = (0 if direction[0] == 0 else -(direction[0]/abs(
+                        direction[0])), 0 if direction[1] == 0 else -(direction[1]/abs(direction[1])))
                     if move == (king_square[0] + opposite_direction[0], king_square[1] + opposite_direction[1], "-"):
                         legal = False
                         break

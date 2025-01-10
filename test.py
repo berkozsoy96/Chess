@@ -24,7 +24,7 @@ def move_gen_test(depth, chess: Chess, max_depth, results):
     return positions
 
 
-fen = "8/8/3p4/KPp4r/1R3p1k/4P3/6P1/8 w - c6 0 1"
+fen = "4k3/5ppp/8/8/8/8/PPP5/3K4 w - - 0 1"
 depth = 6
 
 stockfish_results = {}
