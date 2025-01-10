@@ -316,6 +316,6 @@ class Chess:
 
 
 if __name__ == "__main__":
-    chess = Chess(fen="8/1P6/8/5k2/8/8/8/1K6 w - - 0 1")
+    chess = Chess()
     chess.print_game_info()
     chess.print_board()
